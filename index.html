@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MTG Kortjakt</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #f3f4f6; min-height: 100vh; padding: 20px; }
+        .container { max-width: 1100px; margin: 0 auto; }
+        h1 { font-size: 28px; color: #1f2937; margin-bottom: 8px; }
+        .subtitle { color: #6b7280; margin-bottom: 24px; }
+        .card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 24px; }
+        .card h2 { font-size: 18px; margin-bottom: 12px; color: #374151; }
+        .card p { color: #6b7280; font-size: 14px; margin-bottom: 12px; }
+        textarea { width: 100%; height: 200px; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-family: monospace; font-size: 13px; resize: vertical; }
+        button { padding: 12px 24px; border-radius: 8px; border: none; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+        .btn-blue { background: #2563eb; color: white; }
+        .btn-blue:hover { background: #1d4ed8; }
+        .btn-green { background: #16a34a; color: white; }
+        .btn-green:hover { background: #15803d; }
+        .btn-gray { background: #6b7280; color: white; }
+        .btn-gray:hover { background: #4b5563; }
+        .btn-row { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
+        .parsed-list { margin-top: 16px; padding: 12px; background: #f0fdf4; border-radius: 8px; max-height: 150px; overflow: auto; }
+        .parsed-list strong { color: #166534; }
+        .parsed-list .cards { margin-top: 8px; font-size: 13px; color: #374151; }
+        .progress-bar { width: 100%; background: #e5e7eb; border-radius: 8px; height: 16px; margin: 12px 0; }
+        .progress-fill { background: #2563eb; height: 16px; border-radius: 8px; transition: width 0.3s; }
+        .progress-text { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .stats { display: flex; gap: 32px; flex-wrap: wrap; }
+        .stat { text-align: center; }
+        .stat-label { color: #6b7280; font-size: 14px; }
+        .stat-value { font-size: 28px; font-weight: bold; }
+        .stat-value.green { color: #16a34a; }
+        .stat-value.blue { color: #2563eb; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+        .tab { padding: 12px 24px; border-radius: 12px; border: none; font-size: 16px; font-weight: 600; cursor: pointer; background: white; color: #374151; }
+        .tab.active { background: #2563eb; color: white; }
+        .results-card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .results-header { padding: 16px 24px; color: white; font-weight: bold; font-size: 20px; }
+        .header-purple { background: linear-gradient(to right, #7c3aed, #8b5cf6); }
+        .header-green { background: linear-gradient(to right, #16a34a, #22c55e); }
+        .header-blue { background: linear-gradient(to right, #2563eb, #3b82f6); }
+        .result-row { padding: 12px 24px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 16px; }
+        .result-row:last-child { border-bottom: none; }
+        .set-code { font-family: monospace; font-weight: bold; color: #2563eb; width: 60px; flex-shrink: 0; }
+        .card-list { color: #374151; flex: 1; }
+        .card-name { flex: 1; font-weight: 500; min-width: 180px; }
+        .price-tag { padding: 4px 12px; border-radius: 8px; font-weight: bold; font-size: 14px; white-space: nowrap; }
+        .price-green { background: #c6efce; color: #166534; }
+        .price-yellow { background: #ffeb9c; color: #854d0e; }
+        .price-orange { background: #ffcc99; color: #9a3412; }
+        .price-red { background: #ffc7ce; color: #991b1b; }
+        .cm-link { color: #2563eb; text-decoration: none; font-weight: 600; }
+        .cm-link:hover { text-decoration: underline; }
+        .warning { margin-top: 16px; padding: 12px; background: #fef3c7; border-radius: 8px; font-size: 14px; color: #92400e; }
+        .set-group { margin-bottom: 24px; }
+        .set-header { background: linear-gradient(to right, #2563eb, #3b82f6); padding: 16px 24px; color: white; display: flex; justify-content: space-between; align-items: center; border-radius: 12px 12px 0 0; }
+        .set-title { font-weight: bold; font-size: 20px; display: flex; align-items: center; gap: 12px; }
+        .set-icon { width: 32px; height: 32px; filter: brightness(0) invert(1); }
+        .set-subtitle { margin-left: 12px; opacity: 0.8; font-weight: normal; font-size: 16px; }
+        .set-badge { background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-size: 14px; }
+        .set-cards { background: white; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .cheapest-row { background: #f0fdf4; }
+        .cheapest-name { font-weight: bold; color: #16a34a; }
+        .card-img { width: 40px; height: 56px; object-fit: contain; border-radius: 4px; flex-shrink: 0; }
+        .card-info { flex: 1; min-width: 0; }
+        .card-number { color: #9ca3af; font-size: 12px; }
+        .hidden { display: none; }
+        .top-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+        
+        .color-pip { width: 16px; height: 16px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,0.2); }
+        .color-W { background: linear-gradient(135deg, #fffbd5, #f0e6c8); }
+        .color-U { background: linear-gradient(135deg, #0e68ab, #1a9bd7); }
+        .color-B { background: linear-gradient(135deg, #393939, #1a1a1a); }
+        .color-R { background: linear-gradient(135deg, #d32f2f, #f44336); }
+        .color-G { background: linear-gradient(135deg, #2e7d32, #4caf50); }
+        .color-C { background: linear-gradient(135deg, #9e9e9e, #bdbdbd); }
+        .color-M { background: linear-gradient(135deg, #ffd700, #daa520); }
+        .colors { display: flex; gap: 3px; flex-shrink: 0; }
+        
+        .rarity { font-size: 11px; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; font-weight: 600; flex-shrink: 0; }
+        .rarity-common { background: #1a1a1a; color: white; }
+        .rarity-uncommon { background: #5a6e8c; color: white; }
+        .rarity-rare { background: #c9a227; color: white; }
+        .rarity-mythic { background: #d35400; color: white; }
+        
+        .mana-cost { font-family: monospace; font-size: 12px; color: #666; flex-shrink: 0; min-width: 60px; }
+        
+        .color-separator { background: #e5e7eb; padding: 6px 24px; font-weight: 600; font-size: 13px; color: #6b7280; display: flex; align-items: center; gap: 8px; }
+        .color-separator .color-pip { width: 14px; height: 14px; }
+        
+        .shop-set-icon { width: 24px; height: 24px; margin-right: 8px; vertical-align: middle; }
+        
+        /* Filter-kontroller */
+        .filter-bar { background: white; border-radius: 12px; padding: 16px 24px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+        .filter-group { display: flex; align-items: center; gap: 12px; }
+        .filter-label { font-weight: 600; color: #374151; font-size: 14px; }
+        .filter-select { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; background: white; cursor: pointer; }
+        .filter-select:focus { outline: none; border-color: #2563eb; }
+        .filter-info { color: #6b7280; font-size: 13px; margin-left: auto; }
+        
+        /* Rank-badge för billigaste */
+        .rank-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; margin-left: 8px; }
+        .rank-1 { background: #ffd700; color: #1a1a1a; }
+        .rank-2 { background: #c0c0c0; color: #1a1a1a; }
+        .rank-3 { background: #cd7f32; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎴 MTG Kortjakt</h1>
+        <p class="subtitle">Klistra in din kortlista → Hitta billigaste printings → Sortera per set för pärmjakten</p>
+
+        <!-- STEG 1: Input -->
+        <div id="step1" class="card">
+            <h2>📋 Steg 1: Klistra in din kortlista</h2>
+            <p>Format som stöds: "1 Kortnamn (SET) 123" eller bara "Kortnamn" - en rad per kort</p>
+            <textarea id="cardInput" placeholder="Klistra in din kortlista här...">1 Animar, Soul of Elements (SLD) 1891 *F*
+1 Alchemist's Retrieval (VOW) 47
+1 An Offer You Can't Refuse (SNC) 51
+1 Ancestral Statue (JMP) 458
+1 Autumn's Veil (M12) 164
+1 Lightning Bolt (STA) 42
+1 Sol Ring (MKC) 254
+1 Llanowar Elves (DOM) 168
+1 Beast Whisperer (GRN) 123
+1 Eternal Witness (MMA) 144</textarea>
+            <div class="btn-row">
+                <button class="btn-blue" onclick="parseList()">📝 Parsa lista</button>
+                <span id="parseResult"></span>
+            </div>
+            <div id="parsedCards" class="parsed-list hidden">
+                <strong>Kort som kommer sökas:</strong>
+                <div class="cards" id="parsedCardList"></div>
+            </div>
+        </div>
+
+        <!-- STEG 2: Hämta data -->
+        <div id="step2" class="card hidden">
+            <h2>🔍 Steg 2: Hämta prisdata</h2>
+            <p id="fetchInfo">Hämtar alla printings med EUR-priser från Scryfall</p>
+            <button class="btn-green" onclick="fetchData()">🚀 Hämta kortdata</button>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="card hidden">
+            <div class="progress-text">
+                <span>Hämtar från Scryfall...</span>
+                <span id="progressCount">0/0</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressBar" style="width: 0%"></div>
+            </div>
+            <p id="progressCard" style="text-align: center; color: #6b7280;"></p>
+        </div>
+
+        <!-- Resultat -->
+        <div id="results" class="hidden">
+            <div class="card">
+                <div class="top-row">
+                    <div class="stats">
+                        <div class="stat">
+                            <div class="stat-label">Unika kort</div>
+                            <div class="stat-value" id="statUnique">0</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Totalt (billigaste)</div>
+                            <div class="stat-value green" id="statTotal">0.00 €</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Set att kolla</div>
+                            <div class="stat-value blue" id="statSets">0</div>
+                        </div>
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn-green" onclick="exportCSV()">📥 CSV</button>
+                        <button class="btn-gray" onclick="resetAll()">🔄 Ny lista</button>
+                    </div>
+                </div>
+                <div id="warnings" class="warning hidden"></div>
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" data-view="shopping" onclick="switchView('shopping')">📝 Shoppinglista</button>
+                <button class="tab" data-view="priskoll" onclick="switchView('priskoll')">💰 Priskoll</button>
+                <button class="tab" data-view="perSet" onclick="switchView('perSet')">📁 Per Set</button>
+            </div>
+
+            <!-- Filter för Per Set -->
+            <div id="filterBar" class="filter-bar hidden">
+                <div class="filter-group">
+                    <span class="filter-label">🎯 Visa printings:</span>
+                    <select id="filterPrintings" class="filter-select" onchange="renderPerSet()">
+                        <option value="all">Alla printings</option>
+                        <option value="1" selected>Bara billigaste</option>
+                        <option value="2">Top 2 billigaste</option>
+                        <option value="3">Top 3 billigaste</option>
+                        <option value="5">Top 5 billigaste</option>
+                    </select>
+                </div>
+                <span class="filter-info" id="filterInfo"></span>
+            </div>
+
+            <div id="viewShopping"></div>
+            <div id="viewPriskoll" class="hidden"></div>
+            <div id="viewPerSet" class="hidden"></div>
+        </div>
+    </div>
+
+    <script>
+        const BASIC_LANDS = ['Forest', 'Island', 'Mountain', 'Plains', 'Swamp', 'Wastes', 'Snow-Covered Forest', 'Snow-Covered Island', 'Snow-Covered Mountain', 'Snow-Covered Plains', 'Snow-Covered Swamp'];
+        
+        const COLOR_ORDER = { 'W': 1, 'U': 2, 'B': 3, 'R': 4, 'G': 5, 'C': 6, 'M': 7 };
+        const COLOR_NAMES = { 'W': 'Vit', 'U': 'Blå', 'B': 'Svart', 'R': 'Röd', 'G': 'Grön', 'C': 'Färglös', 'M': 'Flerfärgad' };
+        const RARITY_ORDER = { 'common': 1, 'uncommon': 2, 'rare': 3, 'mythic': 4, 'special': 5, 'bonus': 6 };
+        
+        let cardList = [];
+        let allCards = [];
+        let errorCards = [];
+        let setData = {};
+        let cardPriceRanks = {}; // Sparar rank per kort+set
+
+        function parseList() {
+            const text = document.getElementById('cardInput').value;
+            const cards = new Set();
+            
+            for (const line of text.split('\n')) {
+                let cleaned = line.trim();
+                if (!cleaned) continue;
+                
+                cleaned = cleaned.replace(/^\d+x?\s+/, '');
+                
+                const parenIndex = cleaned.indexOf('(');
+                if (parenIndex > 0) {
+                    cleaned = cleaned.substring(0, parenIndex).trim();
+                }
+                
+                cleaned = cleaned.replace(/\s*\*.*$/, '').trim();
+                
+                if (cleaned && !BASIC_LANDS.includes(cleaned)) {
+                    cards.add(cleaned);
+                }
+            }
+            
+            cardList = Array.from(cards).sort();
+            
+            if (cardList.length > 0) {
+                document.getElementById('parseResult').innerHTML = `<span style="color: #16a34a; font-weight: 600;">✓ ${cardList.length} kort hittade</span>`;
+                document.getElementById('parsedCards').classList.remove('hidden');
+                document.getElementById('parsedCardList').textContent = cardList.join(', ');
+                document.getElementById('step2').classList.remove('hidden');
+                document.getElementById('fetchInfo').textContent = `Hämtar alla printings med EUR-priser från Scryfall (tar ca ${Math.ceil(cardList.length * 0.15)} sekunder)`;
+            } else {
+                document.getElementById('parseResult').innerHTML = `<span style="color: #dc2626;">Inga kort hittades</span>`;
+            }
+        }
+
+        function getColorIdentity(colors, colorIdentity) {
+            const c = colors && colors.length > 0 ? colors : colorIdentity;
+            if (!c || c.length === 0) return 'C';
+            if (c.length > 1) return 'M';
+            return c[0];
+        }
+
+        function getSetIconUrl(setCode) {
+            return `https://svgs.scryfall.io/sets/${setCode.toLowerCase()}.svg`;
+        }
+
+        async function fetchData() {
+            document.getElementById('step1').classList.add('hidden');
+            document.getElementById('step2').classList.add('hidden');
+            document.getElementById('loading').classList.remove('hidden');
+            
+            allCards = [];
+            errorCards = [];
+            setData = {};
+            cardPriceRanks = {};
+            
+            for (let i = 0; i < cardList.length; i++) {
+                const cardName = cardList[i];
+                document.getElementById('progressCount').textContent = `${i + 1}/${cardList.length}`;
+                document.getElementById('progressBar').style.width = `${((i + 1) / cardList.length) * 100}%`;
+                document.getElementById('progressCard').textContent = cardName;
+                
+                try {
+                    const url = `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(cardName)}"&unique=prints`;
+                    const resp = await fetch(url);
+                    
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        let foundAny = false;
+                        
+                        for (const c of data.data || []) {
+                            if (c.prices && c.prices.eur) {
+                                foundAny = true;
+                                let imageUrl = '';
+                                if (c.image_uris && c.image_uris.small) {
+                                    imageUrl = c.image_uris.small;
+                                } else if (c.card_faces && c.card_faces[0] && c.card_faces[0].image_uris) {
+                                    imageUrl = c.card_faces[0].image_uris.small || '';
+                                }
+                                
+                                const setCode = (c.set || '').toLowerCase();
+                                if (!setData[setCode]) {
+                                    setData[setCode] = {
+                                        name: c.set_name || '',
+                                        iconUrl: getSetIconUrl(setCode)
+                                    };
+                                }
+                                
+                                allCards.push({
+                                    name: cardName,
+                                    set: (c.set || '').toUpperCase(),
+                                    setCode: setCode,
+                                    setName: c.set_name || '',
+                                    collectorNumber: c.collector_number || '',
+                                    rarity: c.rarity || 'common',
+                                    priceEur: parseFloat(c.prices.eur) || 0,
+                                    cardmarketUrl: c.purchase_uris ? c.purchase_uris.cardmarket : '',
+                                    imageUrl: imageUrl,
+                                    colors: c.colors || [],
+                                    colorIdentity: c.color_identity || [],
+                                    manaCost: c.mana_cost || '',
+                                    typeLine: c.type_line || '',
+                                    colorKey: getColorIdentity(c.colors, c.color_identity)
+                                });
+                            }
+                        }
+                        
+                        if (!foundAny) errorCards.push(cardName + ' (inga EUR-priser)');
+                    } else {
+                        errorCards.push(cardName + ' (HTTP ' + resp.status + ')');
+                    }
+                } catch (e) {
+                    errorCards.push(cardName + ' (' + e.message + ')');
+                }
+                
+                await new Promise(r => setTimeout(r, 110));
+            }
+            
+            // Beräkna pris-rank för varje kort
+            calculatePriceRanks();
+            
+            document.getElementById('loading').classList.add('hidden');
+            showResults();
+        }
+
+        function calculatePriceRanks() {
+            // Gruppera printings per kortnamn
+            const byName = {};
+            for (const c of allCards) {
+                if (!byName[c.name]) byName[c.name] = [];
+                byName[c.name].push(c);
+            }
+            
+            // Sortera varje korts printings efter pris och tilldela rank
+            for (const name of Object.keys(byName)) {
+                const sorted = byName[name].sort((a, b) => a.priceEur - b.priceEur);
+                for (let i = 0; i < sorted.length; i++) {
+                    const key = `${sorted[i].name}|${sorted[i].set}|${sorted[i].collectorNumber}`;
+                    cardPriceRanks[key] = i + 1; // 1 = billigast, 2 = näst billigast, etc.
+                }
+            }
+        }
+
+        function getCardRank(card) {
+            const key = `${card.name}|${card.set}|${card.collectorNumber}`;
+            return cardPriceRanks[key] || 999;
+        }
+
+        function renderColorPips(colorKey) {
+            if (colorKey === 'M') {
+                return '<span class="color-pip color-M" title="Flerfärgad"></span>';
+            }
+            return `<span class="color-pip color-${colorKey}" title="${COLOR_NAMES[colorKey] || colorKey}"></span>`;
+        }
+
+        function renderRarity(rarity) {
+            const r = rarity.toLowerCase();
+            return `<span class="rarity rarity-${r}">${r.substring(0, 1).toUpperCase()}</span>`;
+        }
+
+        function renderRankBadge(rank) {
+            if (rank === 1) return '<span class="rank-badge rank-1">🥇 #1</span>';
+            if (rank === 2) return '<span class="rank-badge rank-2">🥈 #2</span>';
+            if (rank === 3) return '<span class="rank-badge rank-3">🥉 #3</span>';
+            return '';
+        }
+
+        function showResults() {
+            const cheapest = {};
+            for (const c of allCards) {
+                if (!cheapest[c.name] || c.priceEur < cheapest[c.name].priceEur) {
+                    cheapest[c.name] = c;
+                }
+            }
+            
+            let total = 0;
+            for (const name of Object.keys(cheapest)) {
+                total += cheapest[name].priceEur;
+            }
+            
+            const cheapestBySet = {};
+            for (const name of Object.keys(cheapest)) {
+                const c = cheapest[name];
+                if (!cheapestBySet[c.set]) cheapestBySet[c.set] = [];
+                cheapestBySet[c.set].push(c.name);
+            }
+            
+            document.getElementById('statUnique').textContent = Object.keys(cheapest).length;
+            document.getElementById('statTotal').textContent = total.toFixed(2) + ' €';
+            document.getElementById('statSets').textContent = Object.keys(cheapestBySet).length;
+            
+            if (errorCards.length > 0) {
+                document.getElementById('warnings').classList.remove('hidden');
+                document.getElementById('warnings').innerHTML = `<strong>Varning:</strong> ${errorCards.length} kort kunde inte hämtas: ${errorCards.join(', ')}`;
+            }
+            
+            // Shoppinglista med set-ikoner
+            let shoppingHtml = '<div class="results-card"><div class="results-header header-purple">📝 Shoppinglista för pärmjakten</div>';
+            for (const set of Object.keys(cheapestBySet).sort()) {
+                const setCode = set.toLowerCase();
+                const iconUrl = getSetIconUrl(setCode);
+                shoppingHtml += `<div class="result-row">
+                    <img src="${iconUrl}" class="shop-set-icon" onerror="this.style.display='none'" alt="${set}">
+                    <span class="set-code">${set}</span>
+                    <span class="card-list">${cheapestBySet[set].sort().join(', ')}</span>
+                </div>`;
+            }
+            shoppingHtml += '</div>';
+            document.getElementById('viewShopping').innerHTML = shoppingHtml;
+            
+            // Priskoll
+            let priskollHtml = '<div class="results-card"><div class="results-header header-green">💰 Priskoll (dyrast först)</div>';
+            const sortedByPrice = Object.values(cheapest).sort((a, b) => b.priceEur - a.priceEur);
+            for (const c of sortedByPrice) {
+                const priceClass = c.priceEur < 1 ? 'price-green' : c.priceEur <= 5 ? 'price-yellow' : c.priceEur <= 20 ? 'price-orange' : 'price-red';
+                const bgStyle = c.priceEur > 5 ? 'background: #fef9c3;' : '';
+                priskollHtml += `<div class="result-row" style="${bgStyle}">
+                    <div class="colors">${renderColorPips(c.colorKey)}</div>
+                    <span class="card-name">${c.name}</span>
+                    <span class="set-code">${c.set}</span>
+                    <span class="price-tag ${priceClass}">${c.priceEur.toFixed(2)} €</span>
+                    ${c.cardmarketUrl ? `<a href="${c.cardmarketUrl}" target="_blank" class="cm-link">CM →</a>` : ''}
+                </div>`;
+            }
+            priskollHtml += '</div>';
+            document.getElementById('viewPriskoll').innerHTML = priskollHtml;
+            
+            // Spara för export och rendering
+            window.cheapest = cheapest;
+            window.cheapestBySet = cheapestBySet;
+            
+            // Rendera Per Set
+            renderPerSet();
+            
+            document.getElementById('results').classList.remove('hidden');
+        }
+
+        function renderPerSet() {
+            const filterValue = document.getElementById('filterPrintings').value;
+            const maxRank = filterValue === 'all' ? 9999 : parseInt(filterValue);
+            
+            // Filtrera kort baserat på rank
+            const filteredCards = allCards.filter(c => getCardRank(c) <= maxRank);
+            
+            // Gruppera efter set
+            const bySet = {};
+            for (const c of filteredCards) {
+                if (!bySet[c.set]) bySet[c.set] = [];
+                bySet[c.set].push(c);
+            }
+            
+            // Uppdatera filter-info
+            const totalSets = Object.keys(bySet).length;
+            const totalCards = filteredCards.length;
+            document.getElementById('filterInfo').textContent = `Visar ${totalCards} printings i ${totalSets} set`;
+            
+            // Rendera
+            let perSetHtml = '';
+            const sortedSets = Object.keys(bySet).sort((a, b) => bySet[b].length - bySet[a].length);
+            
+            for (const set of sortedSets) {
+                const setCode = set.toLowerCase();
+                const iconUrl = getSetIconUrl(setCode);
+                const setName = setData[setCode] ? setData[setCode].name : '';
+                
+                const cards = bySet[set].sort((a, b) => {
+                    const colorA = COLOR_ORDER[a.colorKey] || 99;
+                    const colorB = COLOR_ORDER[b.colorKey] || 99;
+                    if (colorA !== colorB) return colorA - colorB;
+                    
+                    const rarityA = RARITY_ORDER[a.rarity] || 99;
+                    const rarityB = RARITY_ORDER[b.rarity] || 99;
+                    if (rarityA !== rarityB) return rarityA - rarityB;
+                    
+                    return a.name.localeCompare(b.name);
+                });
+                
+                perSetHtml += `<div class="set-group">
+                    <div class="set-header">
+                        <div class="set-title">
+                            <img src="${iconUrl}" class="set-icon" onerror="this.style.display='none'" alt="${set}">
+                            <span>${set}</span>
+                            <span class="set-subtitle">${setName}</span>
+                        </div>
+                        <span class="set-badge">${cards.length} kort</span>
+                    </div>
+                    <div class="set-cards">`;
+                
+                let currentColor = null;
+                
+                for (const p of cards) {
+                    if (p.colorKey !== currentColor) {
+                        currentColor = p.colorKey;
+                        perSetHtml += `<div class="color-separator">
+                            ${renderColorPips(currentColor)}
+                            <span>${COLOR_NAMES[currentColor] || currentColor}</span>
+                        </div>`;
+                    }
+                    
+                    const rank = getCardRank(p);
+                    const isCheapest = rank === 1;
+                    const priceClass = p.priceEur < 1 ? 'price-green' : p.priceEur <= 5 ? 'price-yellow' : p.priceEur <= 20 ? 'price-orange' : 'price-red';
+                    
+                    perSetHtml += `<div class="result-row ${isCheapest ? 'cheapest-row' : ''}">
+                        ${p.imageUrl ? `<img src="${p.imageUrl}" class="card-img" alt="">` : '<div class="card-img"></div>'}
+                        <div class="card-info">
+                            <span class="${isCheapest ? 'cheapest-name' : ''}">${isCheapest ? '⭐ ' : ''}${p.name}${renderRankBadge(rank)}</span>
+                            <div class="card-number">#${p.collectorNumber} · ${p.typeLine.split('—')[0].trim()}</div>
+                        </div>
+                        <span class="mana-cost">${p.manaCost.replace(/\{/g, '').replace(/\}/g, '')}</span>
+                        ${renderRarity(p.rarity)}
+                        <span class="price-tag ${priceClass}">${p.priceEur.toFixed(2)} €</span>
+                        ${p.cardmarketUrl ? `<a href="${p.cardmarketUrl}" target="_blank" class="cm-link">CM →</a>` : ''}
+                    </div>`;
+                }
+                
+                perSetHtml += '</div></div>';
+            }
+            
+            document.getElementById('viewPerSet').innerHTML = perSetHtml;
+        }
+
+        function switchView(view) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[data-view="${view}"]`).classList.add('active');
+            
+            document.getElementById('viewShopping').classList.add('hidden');
+            document.getElementById('viewPriskoll').classList.add('hidden');
+            document.getElementById('viewPerSet').classList.add('hidden');
+            document.getElementById('filterBar').classList.add('hidden');
+            
+            if (view === 'shopping') document.getElementById('viewShopping').classList.remove('hidden');
+            if (view === 'priskoll') document.getElementById('viewPriskoll').classList.remove('hidden');
+            if (view === 'perSet') {
+                document.getElementById('viewPerSet').classList.remove('hidden');
+                document.getElementById('filterBar').classList.remove('hidden');
+            }
+        }
+
+        function exportCSV() {
+            let csv = 'Set,Kortnamn,Färg,Rarity,Pris EUR,Rank,Cardmarket\n';
+            for (const set of Object.keys(window.cheapestBySet).sort()) {
+                for (const name of window.cheapestBySet[set].sort()) {
+                    const c = window.cheapest[name];
+                    csv += `${set},"${c.name.replace(/"/g, '""')}",${COLOR_NAMES[c.colorKey] || c.colorKey},${c.rarity},${c.priceEur.toFixed(2)},1,${c.cardmarketUrl}\n`;
+                }
+            }
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'MTG_Kortjakt.csv';
+            a.click();
+        }
+
+        function resetAll() {
+            cardList = [];
+            allCards = [];
+            errorCards = [];
+            setData = {};
+            cardPriceRanks = {};
+            document.getElementById('step1').classList.remove('hidden');
+            document.getElementById('step2').classList.add('hidden');
+            document.getElementById('results').classList.add('hidden');
+            document.getElementById('parsedCards').classList.add('hidden');
+            document.getElementById('parseResult').textContent = '';
+            document.getElementById('warnings').classList.add('hidden');
+            document.getElementById('filterPrintings').value = '1';
+        }
+    </script>
+</body>
+</html>
