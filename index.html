@@ -338,9 +338,14 @@ const DEFAULT_CARDS = [
 ];
 
 // ---------- Lagring ----------
-const LS = { list: 'kortjakt.list', decks: 'kortjakt.decks', cache: 'kortjakt.cache', found: 'kortjakt.found', cart: 'kortjakt.cart', settings: 'kortjakt.settings', tab: 'kortjakt.tab', open: 'kortjakt.open', setIcons: 'kortjakt.seticons' };
+const LS = { list: 'kortjakt.list', decks: 'kortjakt.decks', cache: 'kortjakt.cache', found: 'kortjakt.found', cart: 'kortjakt.cart', settings: 'kortjakt.settings', tab: 'kortjakt.tab', open: 'kortjakt.open', setIcons: 'kortjakt.seticons', sync: 'kortjakt.sync' };
+const SYNC_KEYS = new Set([LS.decks, LS.found, LS.cart]); // det som synkas mellan enheter
+let applyingRemote = true, pushTimer = null;             // true under uppstart så migrering inte räknas som en ändring
 const load = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
-const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { toast('Kunde inte spara lokalt (fullt lagringsutrymme?)'); } };
+const save = (k, v) => {
+  try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { toast('Kunde inte spara lokalt (fullt lagringsutrymme?)'); }
+  if (SYNC_KEYS.has(k)) markDirty();
+};
 const uid = () => Math.random().toString(36).slice(2, 9);
 
 function loadDecks() {
@@ -359,6 +364,7 @@ const state = {
   found: load(LS.found, {}),
   cart: load(LS.cart, []),
   setIcons: load(LS.setIcons, { map: {}, fetchedAt: 0 }),
+  sync: Object.assign({ token: '', gistId: '', updatedAt: 0, dirty: false, lastPush: 0, lastPull: 0, status: '' }, load(LS.sync, {})),
   receipt: false,
   settings: Object.assign({ sekRate: 11.1, rateDate: null, showSek: true, hideFound: false, onlyCheapest: false, setSort: 'count', cardSort: 'price', deckFilter: null }, load(LS.settings, {})),
   tab: load(LS.tab, 'set'),
@@ -579,6 +585,97 @@ async function fetchSetIcons() {
 const setIconUrl = code => `https://svgs.scryfall.io/sets/${(state.setIcons.map || {})[code] || code.toLowerCase()}.svg`;
 // Visar setsymbolen; om bilden inte kan laddas (okänt set, offline utan cache) visas setkoden i stället.
 const setIcon = (code, cls = '') => { const u = setIconUrl(code); return `<span class="seticon ${cls}"><i style="--icon:url('${u}')"></i><img src="${u}" alt="" loading="lazy" onerror="this.parentNode.classList.add('noicon')"><b>${esc(code)}</b></span>`; };
+
+// ---------- Synk via GitHub Gist + säkerhetskopia ----------
+// Decks, bockar och köplistan sparas i en privat gist på användarens GitHub-konto.
+// Senaste ändring vinner (updatedAt). Prisdata synkas inte – den hämtas per enhet.
+const SYNC_FILE = 'mtg-kortjakt.json';
+const syncOn = () => !!(state.sync.token && state.sync.gistId);
+const syncPayload = () => ({ v: 1, updatedAt: state.sync.updatedAt, decks: state.decks, found: state.found, cart: state.cart });
+function markDirty() {
+  if (applyingRemote) return;
+  state.sync.updatedAt = Date.now(); state.sync.dirty = true; save(LS.sync, state.sync);
+  if (syncOn()) { clearTimeout(pushTimer); pushTimer = setTimeout(pushSync, 2500); }
+}
+async function gh(path, opts = {}) {
+  const r = await fetch('https://api.github.com' + path, Object.assign({}, opts, { headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + state.sync.token, 'Content-Type': 'application/json' } }));
+  let data = null; try { data = await r.json(); } catch (e) {}
+  if (!r.ok) { const err = new Error(r.status === 401 ? 'ogiltig token' : (data && data.message) || 'HTTP ' + r.status); err.status = r.status; throw err; }
+  return data;
+}
+function applyRemote(remote) {
+  applyingRemote = true;
+  state.decks = Array.isArray(remote.decks) ? remote.decks : state.decks;
+  state.found = remote.found || {}; state.cart = remote.cart || [];
+  save(LS.decks, state.decks); save(LS.found, state.found); save(LS.cart, state.cart);
+  applyingRemote = false;
+  state.sync.updatedAt = remote.updatedAt || Date.now(); state.sync.dirty = false;
+  state.deckId = null;
+  if (navigator.onLine && wantEntries().some(e => !state.cache[e.key])) setTimeout(() => fetchAll(true), 300);
+}
+async function connectSync(token) {
+  state.sync.token = token.trim(); state.sync.status = 'Kopplar…'; render();
+  try {
+    const list = await gh('/gists?per_page=100');
+    let g = list.find(x => x.files && x.files[SYNC_FILE]);
+    if (g) {
+      g = await gh('/gists/' + g.id);
+      const f = g.files[SYNC_FILE];
+      const remote = JSON.parse((f.truncated ? await (await fetch(f.raw_url)).text() : f.content) || '{}');
+      state.sync.gistId = g.id;
+      const useRemote = (remote.decks || []).length && confirm(`Det finns redan synkad data i molnet (${(remote.decks || []).length} decks, ${new Date(remote.updatedAt || 0).toLocaleString('sv-SE')}).\n\nOK = hämta molnets data till den här enheten.\nAvbryt = skicka upp den här enhetens data i stället.`);
+      if (useRemote) applyRemote(remote); else { state.sync.updatedAt = Date.now(); state.sync.dirty = true; }
+    } else {
+      g = await gh('/gists', { method: 'POST', body: JSON.stringify({ description: 'MTG Kortjakt – synk (skapas av appen)', public: false, files: { [SYNC_FILE]: { content: JSON.stringify(syncPayload()) } } }) });
+      state.sync.gistId = g.id; state.sync.dirty = true;
+    }
+    state.sync.status = ''; save(LS.sync, state.sync);
+    if (state.sync.dirty) await pushSync();
+    render(); toast('Kopplad till GitHub – synk är på');
+  } catch (e) {
+    state.sync.token = ''; state.sync.gistId = ''; state.sync.status = 'Kunde inte koppla: ' + e.message; save(LS.sync, state.sync); render();
+  }
+}
+async function pullSync(manual) {
+  if (!syncOn() || !navigator.onLine) { if (manual) toast('Ingen anslutning'); return; }
+  try {
+    const g = await gh('/gists/' + state.sync.gistId);
+    const f = g.files && g.files[SYNC_FILE]; if (!f) throw new Error('synkfilen saknas i gisten');
+    const remote = JSON.parse((f.truncated ? await (await fetch(f.raw_url)).text() : f.content) || '{}');
+    state.sync.lastPull = Date.now();
+    if ((remote.updatedAt || 0) > (state.sync.updatedAt || 0)) { applyRemote(remote); if (manual) toast('Hämtat senaste från molnet'); }
+    else if (state.sync.dirty || (remote.updatedAt || 0) < (state.sync.updatedAt || 0)) { await pushSync(); if (manual) toast('Skickat upp till molnet'); }
+    else if (manual) toast('Allt är redan synkat');
+    state.sync.status = ''; save(LS.sync, state.sync); render();
+  } catch (e) { state.sync.status = 'Synkfel: ' + e.message; save(LS.sync, state.sync); render(); }
+}
+async function pushSync() {
+  if (!syncOn() || !navigator.onLine) return;
+  try {
+    await gh('/gists/' + state.sync.gistId, { method: 'PATCH', body: JSON.stringify({ files: { [SYNC_FILE]: { content: JSON.stringify(syncPayload()) } } }) });
+    state.sync.dirty = false; state.sync.lastPush = Date.now(); state.sync.status = '';
+  } catch (e) { state.sync.status = 'Synkfel: ' + e.message; }
+  save(LS.sync, state.sync); if (state.tab === 'more') render();
+}
+function disconnectSync() {
+  state.sync = { token: '', gistId: '', updatedAt: state.sync.updatedAt, dirty: false, lastPush: 0, lastPull: 0, status: '' };
+  save(LS.sync, state.sync); render(); toast('Synk avstängd – datan finns kvar lokalt och i gisten');
+}
+const backupJSON = () => JSON.stringify({ app: 'mtg-kortjakt', v: 1, exportedAt: new Date().toISOString(), decks: state.decks, found: state.found, cart: state.cart, settings: state.settings }, null, 1);
+function restoreBackup(text) {
+  const d = JSON.parse(text);
+  if (!d || d.app !== 'mtg-kortjakt' || !Array.isArray(d.decks)) throw new Error('Filen är inte en säkerhetskopia från MTG Kortjakt');
+  if (d.settings) { const s = d.settings; Object.assign(state.settings, { showSek: s.showSek, sekRate: s.sekRate, rateDate: s.rateDate }); save(LS.settings, state.settings); }
+  applyRemote({ decks: d.decks, found: d.found, cart: d.cart, updatedAt: Date.now() });
+  state.sync.dirty = true; save(LS.sync, state.sync); if (syncOn()) pushSync();
+  render(); toast(`Återställt: ${d.decks.length} decks`);
+}
+function downloadFile(name, content, type) {
+  const blob = new Blob([content], { type }); const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+const fmtTime = t => t ? new Date(t).toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' }) : '–';
 
 async function fetchRate(silent) {
   try {
@@ -935,7 +1032,32 @@ function viewDeck(m, q) {
 function viewMore(m) {
   const s = state.settings;
   const found = Object.keys(state.found).length;
+  const sy = state.sync;
+  const syncCard = syncOn()
+    ? `<p><span class="pill ok">${I('check')} Kopplad till GitHub</span></p>
+       <p class="muted">Senast skickat ${fmtTime(sy.lastPush)} · senast hämtat ${fmtTime(sy.lastPull)}${sy.dirty ? ' · osparade ändringar' : ''}</p>
+       ${sy.status ? `<div class="note err">${esc(sy.status)}</div>` : ''}
+       <div class="btnrow"><button class="btn" data-action="sync-now">${I('refresh')} Synka nu</button><button class="btn ghost" data-action="sync-disconnect">Koppla från</button></div>
+       <p class="muted" style="margin-top:10px">Ändringar skickas automatiskt ett par sekunder efter att du gjort dem, och hämtas när appen öppnas. Senaste ändring vinner om två enheter ändrat samtidigt.</p>`
+    : `<p class="muted">Sparar decks, bockar och köplistan i en <b>privat Gist</b> på ditt GitHub-konto så att mobilen och datorn har samma data. Du loggar in genom att klistra in en personlig token en gång per enhet.</p>
+       ${sy.status ? `<div class="note err">${esc(sy.status)}</div>` : ''}
+       <div class="field"><label>GitHub-token</label><input class="txt" id="synctoken" type="password" autocomplete="off" placeholder="github_pat_…"></div>
+       <button class="btn wide" data-action="sync-connect" ${sy.status === 'Kopplar…' ? 'disabled' : ''}>${I('cloud')} Koppla</button>
+       <details><summary class="muted" style="cursor:pointer">Så skapar du en token</summary>
+         <p class="muted" style="margin-top:8px">1. På github.com: Settings → Developer settings → Personal access tokens → <b>Fine-grained tokens</b> → Generate new token.<br>
+         2. Ge den ett namn, välj hur länge den ska gälla.<br>
+         3. Under <b>Account permissions</b>: sätt <b>Gists</b> till <b>Read and write</b>. Inget annat behövs.<br>
+         4. Generate, kopiera och klistra in här. Tokenen sparas bara i den här webbläsaren och skickas bara till api.github.com.</p></details>`;
   return `<div class="card"><div class="pad">
+    <h2>${I('cloud')} Synk mellan enheter</h2>${syncCard}
+  </div></div>
+  <div class="card"><div class="pad">
+    <h2>${I('save')} Säkerhetskopia</h2>
+    <div class="btnrow"><button class="btn sec" data-action="backup-download">${I('download')} Ladda ner</button><button class="btn ghost" data-action="backup-restore">${I('upload')} Återställ från fil</button></div>
+    <input type="file" id="restorefile" accept=".json,application/json" hidden>
+    <p class="muted" style="margin-top:8px">Decks, bockar, köplista och inställningar som en JSON-fil. Fungerar utan GitHub.</p>
+  </div></div>
+  <div class="card"><div class="pad">
     <h2>${I('coins')} Valuta</h2>
     <div class="field"><label>1 € i kronor${s.rateDate ? ` · hämtad ${esc(s.rateDate)}` : ' · manuell'}</label>
       <div class="inline"><input class="txt" id="rate" type="number" step="0.01" inputmode="decimal" value="${s.sekRate}"><button class="btn sec" data-action="rate-save">Spara</button><button class="btn ghost" data-action="rate-fetch">Hämta</button></div></div>
@@ -1126,6 +1248,11 @@ document.addEventListener('click', e => {
     case 'cart-clear': if (confirm('Töm köplistan? Bockarna för "hittad" behålls.')) { state.cart = []; save(LS.cart, state.cart); render(); } break;
     case 'cart-copy': copyText(cartText()); break;
     case 'cart-done': if (confirm('Markera alla kort i köplistan som ägda i dina decks och töm listan?')) cartDone(); break;
+    case 'sync-connect': { const t = ($('#synctoken').value || '').trim(); if (!t) { toast('Klistra in en token först'); break; } connectSync(t); break; }
+    case 'sync-now': pullSync(true); break;
+    case 'sync-disconnect': if (confirm('Koppla från GitHub-synk på den här enheten?')) disconnectSync(); break;
+    case 'backup-download': downloadFile(`MTG_Kortjakt_backup_${new Date().toISOString().slice(0, 10)}.json`, backupJSON(), 'application/json'); break;
+    case 'backup-restore': $('#restorefile').click(); break;
     case 'receipt-show': state.receipt = true; render(); break;
     case 'receipt-close': state.receipt = false; render(); break;
     case 'setsort': state.settings.setSort = el.dataset.v; save(LS.settings, state.settings); render(); break;
@@ -1176,7 +1303,15 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('change', e => {
   if (e.target.classList && e.target.classList.contains('cartprice')) render();
+  if (e.target.id === 'restorefile' && e.target.files && e.target.files[0]) {
+    const f = e.target.files[0];
+    if (!confirm(`Ersätt decks, bockar och köplista på den här enheten med innehållet i "${f.name}"?`)) { e.target.value = ''; return; }
+    f.text().then(t => restoreBackup(t)).catch(err => toast('Kunde inte återställa: ' + err.message, 4000));
+  }
 });
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'synctoken') { const t = e.target.value.trim(); if (t) connectSync(t); } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && syncOn()) pullSync(false); });
+window.addEventListener('online', () => { if (syncOn() && state.sync.dirty) pushSync(); });
 document.addEventListener('input', e => {
   if (e.target.classList && e.target.classList.contains('cartprice')) {
     const x = state.cart.find(x => x.id === e.target.dataset.id);
@@ -1210,6 +1345,9 @@ if (navigator.onLine && rateAge > 1) fetchRate(true);
 if (navigator.onLine && wantEntries().some(e => !state.cache[e.key])) setTimeout(() => fetchAll(true), 400);
 // Set-symbolregistret, max en gång per 30 dagar
 if (navigator.onLine && Date.now() - (state.setIcons.fetchedAt || 0) > 30 * 864e5) setTimeout(fetchSetIcons, 1500);
+// Uppstarten är klar – från och med nu räknas sparningar som ändringar att synka
+applyingRemote = false;
+if (syncOn() && navigator.onLine) setTimeout(() => pullSync(false), 600);
 </script>
 </body>
 </html>
