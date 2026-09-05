@@ -85,6 +85,11 @@
   .sub > * { flex-shrink: 0; }
   .setcode { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-weight: 800; font-size: 11.5px; color: var(--accent); background: var(--accent-soft); padding: 1px 6px; border-radius: 6px; letter-spacing: .02em; }
   .rar { width: 9px; height: 9px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,.15); }
+  .pips { display: inline-flex; gap: 2px; vertical-align: -1px; margin-right: 2px; }
+  .pip { width: 11px; height: 11px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,.25); box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
+  .pip.W { background: #f3edc2; } .pip.U { background: #2a80c9; } .pip.B { background: #4a4257; } .pip.R { background: #d64a3a; } .pip.G { background: #2f9e5b; }
+  .pip.M { background: linear-gradient(135deg, #e6c04a, #c9962b); } .pip.C { background: #b9bcc9; } .pip.L { background: #a5764f; }
+  .chip .pip, .chip .rar { vertical-align: -1px; margin-right: 2px; }
   .rar.common { background: #6b6b6b; } .rar.uncommon { background: #b8c4d4; } .rar.rare { background: #e2b93b; } .rar.mythic { background: #f97316; } .rar.special, .rar.bonus { background: #a855f7; }
   .pr { text-align: right; flex-shrink: 0; }
   .sek { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
@@ -365,7 +370,7 @@ const state = {
   setIcons: load(LS.setIcons, { map: {}, fetchedAt: 0 }),
   sync: Object.assign({ token: '', gistId: '', updatedAt: 0, dirty: false, lastPush: 0, lastPull: 0, status: '' }, load(LS.sync, {})),
   receipt: false,
-  settings: Object.assign({ sekRate: 11.1, rateDate: null, showSek: true, hideFound: false, onlyCheapest: false, setSort: 'count', cardSort: 'price', deckFilter: null, hideSpecial: false }, load(LS.settings, {})),
+  settings: Object.assign({ sekRate: 11.1, rateDate: null, showSek: true, hideFound: false, onlyCheapest: false, setSort: 'count', cardSort: 'price', deckFilter: null, hideSpecial: false, rarityFilter: '', colorFilter: '' }, load(LS.settings, {})),
   tab: load(LS.tab, 'set'),
   open: load(LS.open, {}),
   query: '',
@@ -440,6 +445,9 @@ const activeDecks = () => state.decks.filter(d => d.active !== false);
 //  3. GET  /cards/search q=(oracleid:a or oracleid:b …) game:paper – printings för 12 kort per anrop
 const DELAY = 150;
 const CHUNK = 12;
+// Saknar prisdata, gav fel, eller är från en äldre version utan färg/typ
+const needsFetch = key => { const c = state.cache[key]; return !c || !!c.error || c.colors === undefined; };
+const cardColors = c => { let cols = c.colors; if (!cols && c.card_faces) cols = [...new Set(c.card_faces.flatMap(f => f.colors || []))]; return cols || []; };
 const oid = c => c.oracle_id || (c.card_faces && c.card_faces[0] && c.card_faces[0].oracle_id) || '';
 const isNetErr = e => (e instanceof TypeError) || e.status === 429 || e.status >= 500;
 const errMsg = e => e.status === 404 ? 'Hittades inte på Scryfall (stavning?)'
@@ -486,7 +494,7 @@ function slimPrint(c) {
 async function fetchAll(onlyMissing) {
   if (state.fetching) return;
   const entries = wantEntries();
-  const todo = entries.filter(e => !onlyMissing || !state.cache[e.key] || state.cache[e.key].error);
+  const todo = entries.filter(e => !onlyMissing || needsFetch(e.key));
   if (!todo.length) { toast(entries.length ? 'Alla kort har redan prisdata' : 'Inga saknade kort att hämta'); return; }
   if (!navigator.onLine) { toast('Du verkar vara offline'); return; }
 
@@ -529,12 +537,13 @@ async function fetchAll(onlyMissing) {
       const chunk = resolved.slice(i, i + CHUNK);
       setProgress('Hämtar printings: ' + chunk.map(r => r.name).join(', '));
       const ids = [...new Set(chunk.map(r => r.oracleId).filter(Boolean))];
-      const groups = {};
+      const groups = {}, meta = {};
       let url = 'https://api.scryfall.com/cards/search?unique=prints&order=released&q=' + encodeURIComponent('(' + ids.map(x => 'oracleid:' + x).join(' or ') + ') game:paper');
       try {
         while (url && !ctl.cancelled) {
           const page = await withBackoff(() => sfGet(url), ctl);
           for (const c of page.data || []) {
+            if (!meta[oid(c)]) meta[oid(c)] = { colors: cardColors(c), land: /\bLand\b/.test(c.type_line || '') };
             if (c.digital || !(c.games || []).includes('paper')) continue;
             const s = slimPrint(c);
             if (s.eur != null || s.eurFoil != null) (groups[oid(c)] = groups[oid(c)] || []).push(s);
@@ -545,10 +554,11 @@ async function fetchAll(onlyMissing) {
         if (ctl.cancelled && url) break;
         for (const r of chunk) {
           const prints = (groups[r.oracleId] || []).sort((a, b) => price(a) - price(b));
-          state.cache[r.entry.key] = { name: r.name, oracleId: r.oracleId, prints, fetchedAt: Date.now(), error: prints.length ? null : 'Inga pappersprint med Cardmarket-pris' };
+          const mt = meta[r.oracleId] || { colors: [], land: false };
+          state.cache[r.entry.key] = { name: r.name, oracleId: r.oracleId, prints, colors: mt.colors, land: mt.land, fetchedAt: Date.now(), error: prints.length ? null : 'Inga pappersprint med Cardmarket-pris' };
         }
       } catch (err) {
-        if (err.status === 404) for (const r of chunk) state.cache[r.entry.key] = { name: r.name, oracleId: r.oracleId, prints: [], fetchedAt: Date.now(), error: 'Inga pappersprint med Cardmarket-pris' };
+        if (err.status === 404) for (const r of chunk) state.cache[r.entry.key] = { name: r.name, oracleId: r.oracleId, prints: [], colors: [], land: false, fetchedAt: Date.now(), error: 'Inga pappersprint med Cardmarket-pris' };
         else for (const r of chunk) failed[r.entry.key] = errMsg(err);
       }
       save(LS.cache, state.cache); setProgress(null); render();
@@ -610,7 +620,7 @@ function applyRemote(remote) {
   applyingRemote = false;
   state.sync.updatedAt = remote.updatedAt || Date.now(); state.sync.dirty = false;
   state.deckId = null;
-  if (navigator.onLine && wantEntries().some(e => !state.cache[e.key])) setTimeout(() => fetchAll(true), 300);
+  if (navigator.onLine && wantEntries().some(e => needsFetch(e.key))) setTimeout(() => fetchAll(true), 300);
 }
 async function connectSync(token) {
   state.sync.token = token.trim(); state.sync.status = 'Kopplar…'; render();
@@ -702,6 +712,7 @@ function model() {
     const prints = hide ? all.filter(p => !isSpecial(p)) : all;
     return {
       ...e, name: (c && c.name) || e.input, prints, cheapest: prints[0] || null, hiddenPrints: all.length - prints.length,
+      colors: (c && c.colors) || [], land: !!(c && c.land),
       fetched: !!c, error: c && c.error, fetchedAt: c && c.fetchedAt,
       approx: !!(c && c.name) && norm(c.name) !== e.key && norm(c.name.split(' // ')[0]) !== e.key,
       found: !!state.found[e.key],
@@ -878,7 +889,7 @@ function cardRow(card, p, opts = {}) {
     <input type="checkbox" class="chk" data-action="found" data-key="${esc(card.key)}" ${card.found ? 'checked' : ''} aria-label="Hittad">
     ${thumb(p, card.key)}
     <div class="grow" data-action="detail" data-key="${esc(card.key)}">
-      <div class="nm">${opts.cheapest ? STAR + ' ' : ''}${esc(card.name)}${card.qty > 1 ? ` <span class="pill">×${card.qty}</span>` : ''} ${decks}${card.approx ? ` <span class="pill warn" title="Fuzzy-träff">≈ ${esc(card.input)}</span>` : ''}</div>
+      <div class="nm">${opts.cheapest ? STAR + ' ' : ''}${opts.pips && card.fetched ? pips(card) + ' ' : ''}${esc(card.name)}${card.qty > 1 ? ` <span class="pill">×${card.qty}</span>` : ''} ${decks}${card.approx ? ` <span class="pill warn" title="Fuzzy-träff">≈ ${esc(card.input)}</span>` : ''}</div>
       <div class="sub">${sub.join('')}</div>
     </div>
     <div class="pr">${badge(p)}${state.settings.showSek ? `<span class="sek">${fmtSek(v)}</span>` : ''}</div>
@@ -927,28 +938,49 @@ function viewSets(m, q) {
   return html + `<p class="muted" style="text-align:center;padding:0 10px">${STAR} billigaste printingen · ${I('sparkles')} foilpris · priser = Cardmarket-trend via Scryfall</p>`;
 }
 
+// Färggrupp som pärmarna brukar sorteras efter: W U B R G, M = flerfärgad, C = färglös, L = land
+const COLOR_ORDER = ['W', 'U', 'B', 'R', 'G', 'M', 'C', 'L'];
+const COLOR_NAMES = { W: 'Vit', U: 'Blå', B: 'Svart', R: 'Röd', G: 'Grön', M: 'Guld', C: 'Färglös', L: 'Land' };
+const colorGroup = card => card.land ? 'L' : card.colors.length === 0 ? 'C' : card.colors.length > 1 ? 'M' : card.colors[0];
+const pips = card => `<span class="pips">${card.land ? '<i class="pip L"></i>' : card.colors.length ? card.colors.map(c => `<i class="pip ${c}"></i>`).join('') : '<i class="pip C"></i>'}</span>`;
+
 function viewCards(m, q) {
   if (!m.cards.some(c => c.fetched)) return deckChips() + emptyState(m);
   const s = state.settings;
-  const cards = m.cards.filter(c => matchQ(c, q) && !(s.hideFound && c.found));
+  const rows = [];
+  for (const c of m.cards) {
+    if (!matchQ(c, q) || (s.hideFound && c.found)) continue;
+    if (s.colorFilter && c.fetched && colorGroup(c) !== s.colorFilter) continue;
+    // Med sällsynthetsfilter visas billigaste printing i just den sällsyntheten (den man kan hitta i pärmen)
+    const p = s.rarityFilter ? c.prints.find(x => x.rarity === s.rarityFilter) : c.cheapest;
+    if (s.rarityFilter && !p) continue;
+    rows.push({ c, p });
+  }
   const sorters = {
-    price: (a, b) => (a.found - b.found) || (price(b.cheapest || {}) || -1) - (price(a.cheapest || {}) || -1),
-    name: (a, b) => a.name.localeCompare(b.name, 'sv'),
+    price: (a, b) => (a.c.found - b.c.found) || (price(b.p || {}) || -1) - (price(a.p || {}) || -1),
+    name: (a, b) => a.c.name.localeCompare(b.c.name, 'sv'),
+    color: (a, b) => COLOR_ORDER.indexOf(colorGroup(a.c)) - COLOR_ORDER.indexOf(colorGroup(b.c)) || a.c.name.localeCompare(b.c.name, 'sv'),
     list: () => 0,
   };
-  cards.sort(sorters[s.cardSort] || sorters.price);
+  rows.sort(sorters[s.cardSort] || sorters.price);
+  const rar = [['', 'Alla'], ['common', 'Common'], ['uncommon', 'Uncommon'], ['rare', 'Rare'], ['mythic', 'Mythic']];
   let html = deckChips() + hero(m) + `<div class="chips">
-    ${[['price', 'Dyrast först'], ['name', 'Namn'], ['list', 'Listordning']].map(([k, l]) => `<button class="chip ${s.cardSort === k ? 'on' : ''}" data-action="cardsort" data-v="${k}">${l}</button>`).join('')}
-    <button class="chip ${s.hideFound ? 'on' : ''}" data-action="togglehide">Dölj hittade</button></div><div class="card">`;
-  if (!cards.length) html += `<div class="empty"><div class="big">${I('search-x')}</div><p>Inget matchar.</p></div>`;
-  for (const c of cards) {
-    if (!c.cheapest) {
+    ${[['price', 'Dyrast först'], ['name', 'Namn'], ['color', 'Färg'], ['list', 'Listordning']].map(([k, l]) => `<button class="chip ${s.cardSort === k ? 'on' : ''}" data-action="cardsort" data-v="${k}">${l}</button>`).join('')}
+    <button class="chip ${s.hideFound ? 'on' : ''}" data-action="togglehide">Dölj hittade</button></div>
+  <div class="chips">${rar.map(([k, l]) => `<button class="chip ${s.rarityFilter === k ? 'on' : ''}" data-action="rarityfilter" data-v="${k}">${k ? `<i class="rar ${k}"></i> ` : ''}${l}</button>`).join('')}</div>
+  <div class="chips"><button class="chip ${!s.colorFilter ? 'on' : ''}" data-action="colorfilter" data-v="">Alla färger</button>
+    ${COLOR_ORDER.map(k => `<button class="chip ${s.colorFilter === k ? 'on' : ''}" data-action="colorfilter" data-v="${k}"><i class="pip ${k}"></i> ${COLOR_NAMES[k]}</button>`).join('')}</div>
+  <p class="muted" style="margin:-4px 4px 8px">${rows.length} kort${s.rarityFilter || s.colorFilter ? ` matchar ${[s.rarityFilter, s.colorFilter && COLOR_NAMES[s.colorFilter].toLowerCase()].filter(Boolean).join(' + ')}` : ''}</p>
+  <div class="card">`;
+  if (!rows.length) html += `<div class="empty"><div class="big">${I('search-x')}</div><p>Inget matchar.</p></div>`;
+  for (const { c, p } of rows) {
+    if (!p) {
       html += `<div class="row ${c.found ? 'found' : ''}"><input type="checkbox" class="chk" data-action="found" data-key="${esc(c.key)}" ${c.found ? 'checked' : ''}><div class="thumb empty">${c.error ? I('alert') : I('clock')}</div>
         <div class="grow" data-action="detail" data-key="${esc(c.key)}"><div class="nm">${esc(c.name)}${c.qty > 1 ? ` <span class="pill">×${c.qty}</span>` : ''}</div><div class="sub"><span>${c.error ? esc(c.error) : 'Prisdata ej hämtad'}</span></div></div><span class="badge n">–</span></div>`;
       continue;
     }
-    const alts = c.prints.slice(1, 3).map(p => `${esc(p.set)} ${fmtEur(price(p))}`).join(', ');
-    html += cardRow(c, c.cheapest, { showSet: true, alts: alts ? 'alt: ' + alts : '' });
+    const alts = c.prints.filter(x => x !== p).slice(0, 2).map(x => `${esc(x.set)} ${fmtEur(price(x))}`).join(', ');
+    html += cardRow(c, p, { showSet: true, cheapest: s.rarityFilter ? p === c.cheapest : false, pips: true, alts: alts ? (p === c.cheapest ? 'alt: ' : 'billigast: ') + alts : '' });
   }
   return html + '</div>';
 }
@@ -1271,6 +1303,8 @@ document.addEventListener('click', e => {
     case 'cardsort': state.settings.cardSort = el.dataset.v; save(LS.settings, state.settings); render(); break;
     case 'togglehide': state.settings.hideFound = !state.settings.hideFound; save(LS.settings, state.settings); render(); break;
     case 'togglecheapest': state.settings.onlyCheapest = !state.settings.onlyCheapest; save(LS.settings, state.settings); render(); break;
+    case 'rarityfilter': state.settings.rarityFilter = el.dataset.v; save(LS.settings, state.settings); render(); break;
+    case 'colorfilter': state.settings.colorFilter = el.dataset.v; save(LS.settings, state.settings); render(); break;
     case 'togglespecial': state.settings.hideSpecial = !state.settings.hideSpecial; save(LS.settings, state.settings); render(); break;
     case 'toggle-special-chk': state.settings.hideSpecial = el.checked; save(LS.settings, state.settings); render(); break;
     case 'fetch-missing': fetchAll(true); break;
@@ -1293,8 +1327,8 @@ document.addEventListener('click', e => {
     case 'deck-edit': state.modal = { type: 'deck', id: el.dataset.id }; render(); break;
     case 'deck-open': state.deckId = el.dataset.id; window.scrollTo(0, 0); render(); break;
     case 'deck-back': state.deckId = null; render(); break;
-    case 'deck-active': { const d = deckById(el.dataset.id); if (d) { d.active = el.checked; save(LS.decks, state.decks); render(); if (d.active && wantEntries().some(e => !state.cache[e.key])) fetchAll(true); } break; }
-    case 'deck-active-toggle': { const d = deckById(el.dataset.id); if (d) { d.active = d.active === false; save(LS.decks, state.decks); render(); toast(d.active ? 'Decket ingår i jaktlistan' : 'Decket är utelämnat från jaktlistan'); if (d.active && wantEntries().some(e => !state.cache[e.key])) fetchAll(true); } break; }
+    case 'deck-active': { const d = deckById(el.dataset.id); if (d) { d.active = el.checked; save(LS.decks, state.decks); render(); if (d.active && wantEntries().some(e => needsFetch(e.key))) fetchAll(true); } break; }
+    case 'deck-active-toggle': { const d = deckById(el.dataset.id); if (d) { d.active = d.active === false; save(LS.decks, state.decks); render(); toast(d.active ? 'Decket ingår i jaktlistan' : 'Decket är utelämnat från jaktlistan'); if (d.active && wantEntries().some(e => needsFetch(e.key))) fetchAll(true); } break; }
     case 'deckfilter': state.settings.deckFilter = el.dataset.id || null; save(LS.settings, state.settings); render(); break;
     case 'deck-save': {
       const name = ($('#deckname').value || '').trim() || 'Namnlöst deck';
@@ -1303,7 +1337,7 @@ document.addEventListener('click', e => {
       if (d) { d.name = name; d.text = text; }
       else { const nd = { id: uid(), name, text, have: {}, created: Date.now() }; state.decks.push(nd); state.deckId = nd.id; }
       save(LS.decks, state.decks); state.modal = null; render();
-      const missing = wantEntries().filter(e => !state.cache[e.key]).length;
+      const missing = wantEntries().filter(e => needsFetch(e.key)).length;
       if (missing && navigator.onLine) fetchAll(true); else toast('Sparat');
       break;
     }
@@ -1356,7 +1390,7 @@ render();
 const rateAge = state.settings.rateDate ? (Date.now() - new Date(state.settings.rateDate)) / 864e5 : 99;
 if (navigator.onLine && rateAge > 1) fetchRate(true);
 // Hämta priser automatiskt för kort som saknar prisdata (t.ex. första starten eller ny webbläsare)
-if (navigator.onLine && wantEntries().some(e => !state.cache[e.key])) setTimeout(() => fetchAll(true), 400);
+if (navigator.onLine && wantEntries().some(e => needsFetch(e.key))) setTimeout(() => fetchAll(true), 400);
 // Set-symbolregistret, max en gång per 30 dagar
 if (navigator.onLine && Date.now() - (state.setIcons.fetchedAt || 0) > 30 * 864e5) setTimeout(fetchSetIcons, 1500);
 // Uppstarten är klar – från och med nu räknas sparningar som ändringar att synka

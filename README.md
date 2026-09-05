@@ -21,7 +21,7 @@ eller valfri statisk webbserver i mappen. Sidan hämtar data från Scryfall (`ap
 ## Flikar
 
 - **Set** – saknade kort grupperade per set, som en pärm. Sök på setkod (t.ex. `MH2`) när du står vid en pärm.
-- **Kort** – ett kort per rad med billigaste printing, alternativ och bock för "hittad". Tryck på ett kort för alla printings och för att jämföra butikens pris i kronor mot Cardmarket-trend.
+- **Kort** – ett kort per rad med billigaste printing, alternativ och bock för "hittad". Filter på sällsynthet och färg (t.ex. "uncommon + grön" för en butikspärm med just det) och sortering på färg. Tryck på ett kort för alla printings och för att jämföra butikens pris i kronor mot Cardmarket-trend.
 - **Decks** – klistra in decklistor du bygger på och bocka i vilka kort du redan har (med antal, t.ex. 2 av 4). Allt som saknas i alla decks slås ihop till jaktlistan som Set och Kort visar. Efter butiksbesöket: "Bokför hittade som ägda" flyttar köpen in i decken.
 - **Köp** – köplistan för butiksbesöket. När du hittar ett kort: tryck på det, skriv butikens pris och antal, "Lägg i köplistan". Fliken summerar allt, jämför mot Cardmarket-trend och har en kvittovy ("Visa för kassan") med stor text som personalen kan slå in från. "Köpt – bokför som ägda" flyttar in korten i decken.
 - **Mer** – synk mellan enheter, säkerhetskopia, valutakurs, export (CSV eller kopiera shoppinglista), rensa data, tips.
