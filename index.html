@@ -101,13 +101,12 @@
   details.set > summary { list-style: none; cursor: pointer; padding: 13px 14px; display: flex; align-items: center; gap: 10px; }
   details.set > summary::-webkit-details-marker { display: none; }
   .seticon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px; background: var(--accent-soft); }
-  .seticon i { display: block; width: 24px; height: 24px; background: var(--accent);
-    -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
-  .seticon img { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .seticon img { display: block; width: 24px; height: 24px; object-fit: contain; opacity: .85; }
+  @media (prefers-color-scheme: dark) { .seticon img { filter: invert(1); opacity: .92; } }
   .seticon b { display: none; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; color: var(--accent); }
-  .seticon.noicon i, .seticon.noicon img { display: none; } .seticon.noicon b { display: block; }
-  .seticon.lg { width: 52px; height: 52px; border-radius: 13px; } .seticon.lg i { width: 32px; height: 32px; } .seticon.lg b { font-size: 13px; }
-  .prow .seticon { width: 36px; height: 36px; border-radius: 9px; } .prow .seticon i { width: 22px; height: 22px; }
+  .seticon.noicon img { display: none; } .seticon.noicon b { display: block; }
+  .seticon.lg { width: 52px; height: 52px; border-radius: 13px; } .seticon.lg img { width: 32px; height: 32px; } .seticon.lg b { font-size: 13px; }
+  .prow .seticon { width: 36px; height: 36px; border-radius: 9px; } .prow .seticon img { width: 22px; height: 22px; }
   details.set > summary .code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-weight: 800; font-size: 15px; color: var(--accent);
     background: var(--accent-soft); padding: 4px 8px; border-radius: 8px; min-width: 52px; text-align: center; }
   details.set > summary .sn { flex: 1; min-width: 0; }
@@ -584,7 +583,7 @@ async function fetchSetIcons() {
 }
 const setIconUrl = code => `https://svgs.scryfall.io/sets/${(state.setIcons.map || {})[code] || code.toLowerCase()}.svg`;
 // Visar setsymbolen; om bilden inte kan laddas (okänt set, offline utan cache) visas setkoden i stället.
-const setIcon = (code, cls = '') => { const u = setIconUrl(code); return `<span class="seticon ${cls}"><i style="--icon:url('${u}')"></i><img src="${u}" alt="" loading="lazy" onerror="this.parentNode.classList.add('noicon')"><b>${esc(code)}</b></span>`; };
+const setIcon = (code, cls = '') => `<span class="seticon ${cls}"><img src="${setIconUrl(code)}" alt="" onerror="this.parentNode.classList.add('noicon')"><b>${esc(code)}</b></span>`;
 
 // ---------- Synk via GitHub Gist + säkerhetskopia ----------
 // Decks, bockar och köplistan sparas i en privat gist på användarens GitHub-konto.
