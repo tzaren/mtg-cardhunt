@@ -365,7 +365,7 @@ const state = {
   setIcons: load(LS.setIcons, { map: {}, fetchedAt: 0 }),
   sync: Object.assign({ token: '', gistId: '', updatedAt: 0, dirty: false, lastPush: 0, lastPull: 0, status: '' }, load(LS.sync, {})),
   receipt: false,
-  settings: Object.assign({ sekRate: 11.1, rateDate: null, showSek: true, hideFound: false, onlyCheapest: false, setSort: 'count', cardSort: 'price', deckFilter: null }, load(LS.settings, {})),
+  settings: Object.assign({ sekRate: 11.1, rateDate: null, showSek: true, hideFound: false, onlyCheapest: false, setSort: 'count', cardSort: 'price', deckFilter: null, hideSpecial: false }, load(LS.settings, {})),
   tab: load(LS.tab, 'set'),
   open: load(LS.open, {}),
   query: '',
@@ -688,14 +688,20 @@ async function fetchRate(silent) {
 }
 
 // ---------- Datamodell ----------
+// "Samlingsset" som sällan har en egen pärm i butik: The List, Secret Lair, Mystery Booster, promo- och minneskort.
+const SPECIAL_CODES = new Set(['PLST', 'PLIST', 'SLD', 'SLX', 'MB1', 'MB2', 'CMB1', 'CMB2', 'FMB1']);
+const isSpecial = p => SPECIAL_CODES.has(p.set) || p.setType === 'memorabilia' || p.setType === 'promo';
+
 function model() {
   if (state.settings.deckFilter && !activeDecks().some(d => d.id === state.settings.deckFilter)) { state.settings.deckFilter = null; save(LS.settings, state.settings); }
   const entries = wantEntries(state.settings.deckFilter);
+  const hide = state.settings.hideSpecial;
   const cards = entries.map(e => {
     const c = state.cache[e.key];
-    const prints = (c && c.prints) || [];
+    const all = (c && c.prints) || [];
+    const prints = hide ? all.filter(p => !isSpecial(p)) : all;
     return {
-      ...e, name: (c && c.name) || e.input, prints, cheapest: prints[0] || null,
+      ...e, name: (c && c.name) || e.input, prints, cheapest: prints[0] || null, hiddenPrints: all.length - prints.length,
       fetched: !!c, error: c && c.error, fetchedAt: c && c.fetchedAt,
       approx: !!(c && c.name) && norm(c.name) !== e.key && norm(c.name.split(' // ')[0]) !== e.key,
       found: !!state.found[e.key],
@@ -908,6 +914,7 @@ function viewSets(m, q) {
     ${[['count', 'Flest kort'], ['stars', 'Flest ' + I('star', 'fill')], ['name', 'Setkod'], ['newest', 'Nyast']].map(([k, l]) => `<button class="chip ${s.setSort === k ? 'on' : ''}" data-action="setsort" data-v="${k}">${l}</button>`).join('')}
     <button class="chip ${s.onlyCheapest ? 'on' : ''}" data-action="togglecheapest" title="Visa bara den billigaste printingen av varje kort">Bara ${I('star', 'fill')}</button>
     <button class="chip ${s.hideFound ? 'on' : ''}" data-action="togglehide">Dölj hittade</button>
+    <button class="chip ${s.hideSpecial ? 'on' : ''}" data-action="togglespecial" title="Dölj The List, Secret Lair, Mystery Booster, promo- och minneskort">Dölj The List m.fl.</button>
   </div>`;
   if (!sets.length) html += `<div class="card empty"><div class="big">${I('search-x')}</div><p>Inget matchar "${esc(state.query)}".</p></div>`;
   for (const { set, items } of sets) {
@@ -1063,6 +1070,11 @@ function viewMore(m) {
     <label class="inline"><input type="checkbox" class="chk" data-action="toggle-sek" ${s.showSek ? 'checked' : ''}> Visa priser även i kronor</label>
   </div></div>
   <div class="card"><div class="pad">
+    <h2>${I('folder')} Printings att visa</h2>
+    <label class="inline"><input type="checkbox" class="chk" data-action="toggle-special-chk" ${s.hideSpecial ? 'checked' : ''}> Dölj The List, Secret Lair, Mystery Booster, promo- och minneskort</label>
+    <p class="muted" style="margin-top:8px">De här tryckningarna har sällan en egen pärm i butik. När de är dolda räknas "billigaste printing" bara på vanliga set, så stjärnan hamnar på ett kort du faktiskt kan hitta.</p>
+  </div></div>
+  <div class="card"><div class="pad">
     <h2>${I('upload')} Export av jaktlistan</h2>
     <button class="btn wide" data-action="copy">${I('copy')} Kopiera shoppinglista (per set)</button>
     <button class="btn sec wide" data-action="csv">${I('download')} Ladda ner CSV</button>
@@ -1144,6 +1156,7 @@ function renderModal(m) {
     ${cmp}
     ${card.error ? `<div class="note err" style="margin-top:12px">${esc(card.error)}</div>` : ''}
     ${card.prints.length ? `<h2 style="margin-top:16px">Alla printings <span class="muted">billigast först · tryck för att välja referens</span></h2>` : ''}
+    ${card.hiddenPrints ? `<p class="muted">${card.hiddenPrints} printings dolda (The List m.fl.) – ändra under Mer.</p>` : ''}
     ${card.prints.map((p, i) => `<div class="prow ${i === sel ? 'sel' : ''}" data-action="modal-sel" data-i="${i}">
       ${setIcon(p.set)}
       <div style="flex:1;min-width:0"><div class="nm">${i === 0 ? STAR + ' ' : ''}${esc(p.setName)} <span class="muted mono" style="font-weight:700">${esc(p.set)}</span> <span class="muted">${esc((p.released || '').slice(0, 4))}</span></div>
@@ -1258,6 +1271,8 @@ document.addEventListener('click', e => {
     case 'cardsort': state.settings.cardSort = el.dataset.v; save(LS.settings, state.settings); render(); break;
     case 'togglehide': state.settings.hideFound = !state.settings.hideFound; save(LS.settings, state.settings); render(); break;
     case 'togglecheapest': state.settings.onlyCheapest = !state.settings.onlyCheapest; save(LS.settings, state.settings); render(); break;
+    case 'togglespecial': state.settings.hideSpecial = !state.settings.hideSpecial; save(LS.settings, state.settings); render(); break;
+    case 'toggle-special-chk': state.settings.hideSpecial = el.checked; save(LS.settings, state.settings); render(); break;
     case 'fetch-missing': fetchAll(true); break;
     case 'refresh-all': if (confirm('Hämta om priser för alla saknade kort? Bockar och decks påverkas inte.')) fetchAll(false); break;
     case 'cancel-fetch': if (state.fetching) state.fetching.cancel(); break;
