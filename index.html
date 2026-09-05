@@ -1,597 +1,1215 @@
 <!DOCTYPE html>
 <html lang="sv">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MTG Kortjakt</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: system-ui, -apple-system, sans-serif; background: #f3f4f6; min-height: 100vh; padding: 20px; }
-        .container { max-width: 1100px; margin: 0 auto; }
-        h1 { font-size: 28px; color: #1f2937; margin-bottom: 8px; }
-        .subtitle { color: #6b7280; margin-bottom: 24px; }
-        .card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 24px; }
-        .card h2 { font-size: 18px; margin-bottom: 12px; color: #374151; }
-        .card p { color: #6b7280; font-size: 14px; margin-bottom: 12px; }
-        textarea { width: 100%; height: 200px; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-family: monospace; font-size: 13px; resize: vertical; }
-        button { padding: 12px 24px; border-radius: 8px; border: none; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-        .btn-blue { background: #2563eb; color: white; }
-        .btn-blue:hover { background: #1d4ed8; }
-        .btn-green { background: #16a34a; color: white; }
-        .btn-green:hover { background: #15803d; }
-        .btn-gray { background: #6b7280; color: white; }
-        .btn-gray:hover { background: #4b5563; }
-        .btn-row { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
-        .parsed-list { margin-top: 16px; padding: 12px; background: #f0fdf4; border-radius: 8px; max-height: 150px; overflow: auto; }
-        .parsed-list strong { color: #166534; }
-        .parsed-list .cards { margin-top: 8px; font-size: 13px; color: #374151; }
-        .progress-bar { width: 100%; background: #e5e7eb; border-radius: 8px; height: 16px; margin: 12px 0; }
-        .progress-fill { background: #2563eb; height: 16px; border-radius: 8px; transition: width 0.3s; }
-        .progress-text { display: flex; justify-content: space-between; margin-bottom: 8px; }
-        .stats { display: flex; gap: 32px; flex-wrap: wrap; }
-        .stat { text-align: center; }
-        .stat-label { color: #6b7280; font-size: 14px; }
-        .stat-value { font-size: 28px; font-weight: bold; }
-        .stat-value.green { color: #16a34a; }
-        .stat-value.blue { color: #2563eb; }
-        .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
-        .tab { padding: 12px 24px; border-radius: 12px; border: none; font-size: 16px; font-weight: 600; cursor: pointer; background: white; color: #374151; }
-        .tab.active { background: #2563eb; color: white; }
-        .results-card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .results-header { padding: 16px 24px; color: white; font-weight: bold; font-size: 20px; }
-        .header-purple { background: linear-gradient(to right, #7c3aed, #8b5cf6); }
-        .header-green { background: linear-gradient(to right, #16a34a, #22c55e); }
-        .header-blue { background: linear-gradient(to right, #2563eb, #3b82f6); }
-        .result-row { padding: 12px 24px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 16px; }
-        .result-row:last-child { border-bottom: none; }
-        .set-code { font-family: monospace; font-weight: bold; color: #2563eb; width: 60px; flex-shrink: 0; }
-        .card-list { color: #374151; flex: 1; }
-        .card-name { flex: 1; font-weight: 500; min-width: 180px; }
-        .price-tag { padding: 4px 12px; border-radius: 8px; font-weight: bold; font-size: 14px; white-space: nowrap; }
-        .price-green { background: #c6efce; color: #166534; }
-        .price-yellow { background: #ffeb9c; color: #854d0e; }
-        .price-orange { background: #ffcc99; color: #9a3412; }
-        .price-red { background: #ffc7ce; color: #991b1b; }
-        .cm-link { color: #2563eb; text-decoration: none; font-weight: 600; }
-        .cm-link:hover { text-decoration: underline; }
-        .warning { margin-top: 16px; padding: 12px; background: #fef3c7; border-radius: 8px; font-size: 14px; color: #92400e; }
-        .set-group { margin-bottom: 24px; }
-        .set-header { background: linear-gradient(to right, #2563eb, #3b82f6); padding: 16px 24px; color: white; display: flex; justify-content: space-between; align-items: center; border-radius: 12px 12px 0 0; }
-        .set-title { font-weight: bold; font-size: 20px; display: flex; align-items: center; gap: 12px; }
-        .set-icon { width: 32px; height: 32px; filter: brightness(0) invert(1); }
-        .set-subtitle { margin-left: 12px; opacity: 0.8; font-weight: normal; font-size: 16px; }
-        .set-badge { background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-size: 14px; }
-        .set-cards { background: white; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .cheapest-row { background: #f0fdf4; }
-        .cheapest-name { font-weight: bold; color: #16a34a; }
-        .card-img { width: 40px; height: 56px; object-fit: contain; border-radius: 4px; flex-shrink: 0; }
-        .card-info { flex: 1; min-width: 0; }
-        .card-number { color: #9ca3af; font-size: 12px; }
-        .hidden { display: none; }
-        .top-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
-        
-        .color-pip { width: 16px; height: 16px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,0.2); }
-        .color-W { background: linear-gradient(135deg, #fffbd5, #f0e6c8); }
-        .color-U { background: linear-gradient(135deg, #0e68ab, #1a9bd7); }
-        .color-B { background: linear-gradient(135deg, #393939, #1a1a1a); }
-        .color-R { background: linear-gradient(135deg, #d32f2f, #f44336); }
-        .color-G { background: linear-gradient(135deg, #2e7d32, #4caf50); }
-        .color-C { background: linear-gradient(135deg, #9e9e9e, #bdbdbd); }
-        .color-M { background: linear-gradient(135deg, #ffd700, #daa520); }
-        .colors { display: flex; gap: 3px; flex-shrink: 0; }
-        
-        .rarity { font-size: 11px; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; font-weight: 600; flex-shrink: 0; }
-        .rarity-common { background: #1a1a1a; color: white; }
-        .rarity-uncommon { background: #5a6e8c; color: white; }
-        .rarity-rare { background: #c9a227; color: white; }
-        .rarity-mythic { background: #d35400; color: white; }
-        
-        .mana-cost { font-family: monospace; font-size: 12px; color: #666; flex-shrink: 0; min-width: 60px; }
-        
-        .color-separator { background: #e5e7eb; padding: 6px 24px; font-weight: 600; font-size: 13px; color: #6b7280; display: flex; align-items: center; gap: 8px; }
-        .color-separator .color-pip { width: 14px; height: 14px; }
-        
-        .shop-set-icon { width: 24px; height: 24px; margin-right: 8px; vertical-align: middle; }
-        
-        /* Filter-kontroller */
-        .filter-bar { background: white; border-radius: 12px; padding: 16px 24px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
-        .filter-group { display: flex; align-items: center; gap: 12px; }
-        .filter-label { font-weight: 600; color: #374151; font-size: 14px; }
-        .filter-select { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; background: white; cursor: pointer; }
-        .filter-select:focus { outline: none; border-color: #2563eb; }
-        .filter-info { color: #6b7280; font-size: 13px; margin-left: auto; }
-        
-        /* Rank-badge för billigaste */
-        .rank-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; margin-left: 8px; }
-        .rank-1 { background: #ffd700; color: #1a1a1a; }
-        .rank-2 { background: #c0c0c0; color: #1a1a1a; }
-        .rank-3 { background: #cd7f32; color: white; }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#312e81">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>MTG Kortjakt</title>
+<style>
+  :root {
+    --bg: #f3f4fa; --card: #ffffff; --card2: #f7f7fc; --text: #17172b; --muted: #6b6e85; --line: #e4e6f0;
+    --accent: #4f46e5; --accent-soft: rgba(79,70,229,.10); --accent-text: #ffffff;
+    --grad: linear-gradient(135deg, #312e81 0%, #4f46e5 55%, #7c3aed 100%);
+    --star: #b45309; --ok: #15803d; --ok-soft: rgba(21,128,61,.12); --danger: #b91c1c; --danger-soft: rgba(185,28,28,.10);
+    --g-bg: #dcfce7; --g-tx: #166534; --y-bg: #fef3c7; --y-tx: #92400e;
+    --o-bg: #ffedd5; --o-tx: #9a3412; --r-bg: #fee2e2; --r-tx: #991b1b;
+    --shadow: 0 1px 2px rgba(20,20,60,.06), 0 6px 18px rgba(20,20,60,.06);
+    --nav-h: 64px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e0f1e; --card: #181a30; --card2: #1f2140; --text: #eef0ff; --muted: #9a9ec0; --line: #2a2d4d;
+      --accent: #8b87ff; --accent-soft: rgba(139,135,255,.16);
+      --grad: linear-gradient(135deg, #1e1b4b 0%, #4338ca 55%, #6d28d9 100%);
+      --star: #fbbf24; --ok: #4ade80; --ok-soft: rgba(74,222,128,.14); --danger: #f87171; --danger-soft: rgba(248,113,113,.14);
+      --g-bg: #14532d; --g-tx: #bbf7d0; --y-bg: #713f12; --y-tx: #fde68a;
+      --o-bg: #7c2d12; --o-tx: #fed7aa; --r-bg: #7f1d1d; --r-tx: #fecaca;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust: 100%; }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  a { color: var(--accent); text-decoration: none; }
+  h2 { font-size: 16px; margin: 0 0 6px; letter-spacing: -.01em; }
+  p { margin: 0 0 8px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+  /* Header */
+  header { position: sticky; top: 0; z-index: 10; background: var(--grad); color: #fff;
+    padding: calc(env(safe-area-inset-top) + 10px) 14px 12px; box-shadow: 0 2px 12px rgba(30,20,90,.25); }
+  header .bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  header h1 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -.02em; display: flex; align-items: center; gap: 8px; }
+  header .stats { font-size: 12.5px; background: rgba(255,255,255,.16); padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+  .search { position: relative; }
+  .search .ico { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); opacity: .55; pointer-events: none; }
+  .search input { width: 100%; height: 44px; padding: 0 42px 0 40px; border: none; border-radius: 14px;
+    background: #fff; color: #111; font-size: 16px; box-shadow: inset 0 1px 2px rgba(0,0,0,.08); }
+  .search input::placeholder { color: #8a8da3; }
+  .search button { position: absolute; right: 6px; top: 6px; width: 32px; height: 32px; border: none; border-radius: 10px;
+    background: #eceef8; color: #333; font-size: 18px; line-height: 1; }
+
+  main { padding: 14px 14px calc(var(--nav-h) + env(safe-area-inset-bottom) + 96px); max-width: 720px; margin: 0 auto; }
+  .card { background: var(--card); border-radius: 18px; box-shadow: var(--shadow); margin-bottom: 14px; overflow: hidden; }
+  .card .pad { padding: 16px; }
+  .section-title { display: flex; align-items: center; justify-content: space-between; margin: 18px 4px 8px; }
+  .section-title h2 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+
+  /* Hero summary */
+  .hero { background: var(--grad); color: #fff; border-radius: 20px; padding: 16px; margin-bottom: 14px; box-shadow: 0 8px 24px rgba(60,40,180,.25); }
+  .hero .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .hero b { display: block; font-size: 22px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
+  .hero small { display: block; font-size: 11.5px; opacity: .8; margin-top: 3px; }
+  .hero .track { height: 7px; background: rgba(255,255,255,.22); border-radius: 999px; overflow: hidden; margin-top: 14px; }
+  .hero .fill { height: 100%; background: #fff; border-radius: 999px; transition: width .4s; }
+  .hero .foot { display: flex; justify-content: space-between; font-size: 12px; opacity: .85; margin-top: 6px; }
+
+  /* Rows */
+  .row { display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-top: 1px solid var(--line); min-height: 64px; }
+  .row:first-child { border-top: none; }
+  .row.cheap { background: linear-gradient(90deg, var(--ok-soft), transparent 60%); }
+  .row.found .nm, .row.owned .nm { text-decoration: line-through; opacity: .5; }
+  .row.found .thumb, .row.owned .thumb { opacity: .45; filter: grayscale(.6); }
+  .thumb { width: 44px; height: 62px; object-fit: cover; border-radius: 6px; background: var(--line); flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+  .thumb.empty { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 18px; }
+  .row .grow { flex: 1; min-width: 0; cursor: pointer; }
+  .nm { font-weight: 650; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sub { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; display: flex; align-items: center; gap: 6px; }
+  .sub > * { flex-shrink: 0; }
+  .setcode { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-weight: 800; font-size: 11.5px; color: var(--accent); background: var(--accent-soft); padding: 1px 6px; border-radius: 6px; letter-spacing: .02em; }
+  .rar { width: 9px; height: 9px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,.15); }
+  .rar.common { background: #6b6b6b; } .rar.uncommon { background: #b8c4d4; } .rar.rare { background: #e2b93b; } .rar.mythic { background: #f97316; } .rar.special, .rar.bonus { background: #a855f7; }
+  .pr { text-align: right; flex-shrink: 0; }
+  .sek { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
+  .badge { display: inline-block; padding: 4px 9px; border-radius: 9px; font-weight: 750; font-size: 13.5px; white-space: nowrap; letter-spacing: -.01em; }
+  .badge.g { background: var(--g-bg); color: var(--g-tx); } .badge.y { background: var(--y-bg); color: var(--y-tx); }
+  .badge.o { background: var(--o-bg); color: var(--o-tx); } .badge.r { background: var(--r-bg); color: var(--r-tx); }
+  .badge.n { background: var(--line); color: var(--muted); }
+  input[type=checkbox].chk { width: 24px; height: 24px; flex-shrink: 0; accent-color: var(--ok); margin: 0; cursor: pointer; }
+  .pill { display: inline-block; background: var(--line); border-radius: 999px; padding: 2px 9px; font-size: 12px; white-space: nowrap; font-weight: 600; }
+  .pill.star { color: var(--star); } .pill.ok { color: var(--ok); background: var(--ok-soft); } .pill.accent { color: var(--accent); background: var(--accent-soft); }
+  .pill.warn { color: var(--y-tx); background: var(--y-bg); }
+
+  /* Sets */
+  details.set > summary { list-style: none; cursor: pointer; padding: 13px 14px; display: flex; align-items: center; gap: 10px; }
+  details.set > summary::-webkit-details-marker { display: none; }
+  .seticon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px; background: var(--accent-soft); }
+  .seticon i { display: block; width: 24px; height: 24px; background: var(--accent);
+    -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+  .seticon img { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .seticon b { display: none; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; color: var(--accent); }
+  .seticon.noicon i, .seticon.noicon img { display: none; } .seticon.noicon b { display: block; }
+  .seticon.lg { width: 52px; height: 52px; border-radius: 13px; } .seticon.lg i { width: 32px; height: 32px; } .seticon.lg b { font-size: 13px; }
+  .prow .seticon { width: 36px; height: 36px; border-radius: 9px; } .prow .seticon i { width: 22px; height: 22px; }
+  details.set > summary .code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-weight: 800; font-size: 15px; color: var(--accent);
+    background: var(--accent-soft); padding: 4px 8px; border-radius: 8px; min-width: 52px; text-align: center; }
+  details.set > summary .sn { flex: 1; min-width: 0; }
+  details.set > summary .sn b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
+  details.set > summary .sn span { color: var(--muted); font-size: 12px; }
+  details.set > summary .pills { display: flex; gap: 4px; flex-shrink: 0; }
+  details.set > summary .chev { color: var(--muted); transition: transform .2s; font-size: 12px; }
+  details.set[open] > summary .chev { transform: rotate(90deg); }
+  details.set[open] > summary { border-bottom: 1px solid var(--line); }
+
+  /* Chips & buttons */
+  .chips { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; margin: 0 -14px 12px; padding: 2px 14px; scrollbar-width: none; align-items: center; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex-shrink: 0; border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 7px 13px; font-size: 13px; font-weight: 600; color: var(--text); transition: transform .1s; }
+  .chip:active { transform: scale(.96); }
+  .chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: none; border-radius: 13px;
+    padding: 12px 16px; font-weight: 700; background: var(--accent); color: #fff; min-height: 46px; transition: transform .1s, filter .15s; }
+  .btn:active { transform: scale(.98); filter: brightness(.95); }
+  .btn.sec { background: var(--accent-soft); color: var(--accent); }
+  .btn.ghost { background: var(--card2); color: var(--text); }
+  .btn.danger { background: var(--danger-soft); color: var(--danger); }
+  .btn.ok { background: var(--ok-soft); color: var(--ok); }
+  .btn.wide { width: 100%; margin-bottom: 8px; }
+  .btn.sm { min-height: 36px; padding: 6px 12px; font-size: 13px; border-radius: 10px; }
+  .btn:disabled { opacity: .45; }
+  .btnrow { display: flex; gap: 8px; } .btnrow .btn { flex: 1; }
+  textarea { width: 100%; min-height: 200px; border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--card2); resize: vertical;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13.5px; line-height: 1.5; }
+  input.txt { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; background: var(--card2); font-size: 16px; }
+  textarea:focus, input.txt:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+  .field { margin-bottom: 12px; } .field label { display: block; font-size: 12.5px; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
+  .inline { display: flex; gap: 8px; align-items: center; }
+  .inline .txt { flex: 1; }
+  .note { border-radius: 12px; padding: 10px 12px; font-size: 13.5px; margin-bottom: 10px; }
+  .note.warn { background: var(--y-bg); color: var(--y-tx); } .note.err { background: var(--r-bg); color: var(--r-tx); } .note.info { background: var(--accent-soft); color: var(--text); }
+  .empty { text-align: center; padding: 34px 18px; }
+  .empty .big { font-size: 52px; margin-bottom: 10px; line-height: 1; }
+  .empty p { font-size: 15px; }
+
+  /* Decks */
+  .deck { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-top: 1px solid var(--line); cursor: pointer; }
+  .deck:first-child { border-top: none; }
+  .deck .ic { width: 44px; height: 44px; border-radius: 12px; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+  .deck .info { flex: 1; min-width: 0; }
+  .deck .info b { display: block; font-size: 15.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .deck .info .track { height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; margin: 7px 0 5px; }
+  .deck .info .fill { height: 100%; background: var(--ok); border-radius: 999px; }
+  .deck .chev { color: var(--muted); }
+  .deck.off .ic, .deck.off .info { opacity: .45; }
+  .switch { position: relative; width: 44px; height: 26px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .switch span { position: absolute; inset: 0; background: var(--line); border-radius: 999px; transition: background .2s; cursor: pointer; }
+  .switch span::after { content: ""; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .2s; }
+  .switch input:checked + span { background: var(--ok); }
+  .switch input:checked + span::after { transform: translateX(18px); }
+  .deckchips { margin-bottom: 10px; }
+  .have { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .have .step { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--card2); }
+  .have .step.full { border-color: var(--ok); background: var(--ok-soft); } .have .step.part { border-color: var(--star); }
+  .have .step button { border: none; background: transparent; width: 26px; height: 30px; font-size: 17px; line-height: 1; color: var(--muted); }
+  .have .step span { min-width: 30px; text-align: center; font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums; cursor: pointer; }
+  .have .step.full span { color: var(--ok); }
+  .row.deckrow { gap: 9px; padding-left: 10px; } .row.deckrow .thumb { width: 36px; height: 50px; }
+  .back { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; color: var(--accent); font-weight: 700; padding: 0; margin-bottom: 10px; font-size: 15px; }
+  .grouphead { padding: 10px 14px 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; background: var(--card2); border-top: 1px solid var(--line); }
+
+  /* Bottom nav */
+  nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; background: color-mix(in srgb, var(--card) 88%, transparent);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom); height: calc(var(--nav-h) + env(safe-area-inset-bottom)); }
+  nav.tabs button { flex: 1; border: none; background: none; color: var(--muted); font-size: 11.5px; font-weight: 650;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+  nav.tabs button .ic { font-size: 20px; line-height: 1; padding: 5px 16px; border-radius: 999px; transition: background .15s; }
+  nav.tabs button.on { color: var(--accent); }
+  nav.tabs button.on .ic { background: var(--accent-soft); }
+
+  /* Progress, toast, modal */
+  #progress { position: fixed; left: 14px; right: 14px; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 12px); z-index: 11;
+    background: var(--card); border-radius: 16px; box-shadow: 0 8px 28px rgba(0,0,0,.28); padding: 12px 14px; max-width: 692px; margin: 0 auto; }
+  #progress .track { height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; margin: 8px 0; }
+  #progress .fill { height: 100%; background: var(--accent); transition: width .2s; border-radius: 999px; }
+  #progress .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 700; }
+  #progress .top button { border: none; background: var(--line); border-radius: 8px; padding: 6px 10px; font-weight: 600; }
+  #toast { position: fixed; left: 50%; transform: translateX(-50%) translateY(6px); bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 18px);
+    background: #16172b; color: #fff; padding: 10px 16px; border-radius: 999px; font-size: 14px; opacity: 0; transition: opacity .2s, transform .2s;
+    pointer-events: none; z-index: 20; max-width: 90vw; text-align: center; box-shadow: 0 6px 20px rgba(0,0,0,.3); }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #modal { position: fixed; inset: 0; z-index: 30; background: rgba(10,10,30,.55); display: flex; align-items: flex-end; justify-content: center; }
+  #modal .sheet { background: var(--card); width: 100%; max-width: 640px; max-height: 92vh; overflow: auto; border-radius: 22px 22px 0 0;
+    padding: 10px 16px calc(env(safe-area-inset-bottom) + 22px); animation: up .22s ease-out; }
+  @keyframes up { from { transform: translateY(30px); opacity: .6; } to { transform: none; opacity: 1; } }
+  #modal .handle { width: 40px; height: 5px; border-radius: 999px; background: var(--line); margin: 0 auto 12px; }
+  @media (min-width: 700px) { #modal { align-items: center; } #modal .sheet { border-radius: 22px; } #modal .handle { display: none; } }
+  #modal .head { display: flex; gap: 14px; align-items: flex-start; }
+  #modal .head img { width: 124px; border-radius: 8px; background: var(--line); flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,0,0,.25); }
+  #modal .head h2 { font-size: 20px; margin: 0 0 4px; font-weight: 800; letter-spacing: -.02em; }
+  #modal .close { position: absolute; right: 14px; top: 14px; border: none; background: var(--line); border-radius: 999px; width: 34px; height: 34px; font-size: 20px; line-height: 1; }
+  #modal .sheet { position: relative; }
+  .prow { display: flex; align-items: center; gap: 10px; padding: 10px 6px; border-top: 1px solid var(--line); cursor: pointer; border-radius: 10px; }
+  .prow.sel { background: var(--accent-soft); border-color: transparent; }
+  .prow .code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-weight: 800; color: var(--accent); width: 52px; flex-shrink: 0; font-size: 13px; }
+  .cmp { background: var(--card2); border-radius: 14px; padding: 12px 14px; margin-top: 14px; }
+  .cmp .res { margin-top: 8px; font-weight: 650; }
+  .cmp .res.good { color: var(--ok); } .cmp .res.bad { color: var(--danger); }
+  .links a { margin-right: 16px; font-weight: 700; }
+  ul.errs { margin: 0; padding-left: 18px; font-size: 14px; }
+  .ic-svg { width: 1.1em; height: 1.1em; vertical-align: -0.2em; flex-shrink: 0; display: inline-block; }
+  .ic-svg.fill { fill: currentColor; } .ic-svg.star { color: var(--star); }
+  .btn .ic-svg, .chip .ic-svg { width: 17px; height: 17px; vertical-align: -3px; }
+  .chip.on .ic-svg.star { color: #fff; }
+  .empty .big .ic-svg { width: 54px; height: 54px; color: var(--accent); opacity: .75; stroke-width: 1.5; }
+  .thumb.empty .ic-svg { width: 20px; height: 20px; opacity: .6; }
+  h2 .ic-svg { color: var(--accent); margin-right: 4px; }
+  header h1 .ic-svg { width: 24px; height: 24px; opacity: .95; }
+  .search .ico .ic-svg { width: 18px; height: 18px; color: #333; display: block; }
+  nav.tabs button .ic .ic-svg { width: 22px; height: 22px; display: block; stroke-width: 1.9; }
+  .deck .ic .ic-svg { width: 22px; height: 22px; color: var(--accent); }
+  .deck .ic.done { background: var(--ok-soft); } .deck .ic.done .ic-svg { color: var(--ok); }
+  .pill .ic-svg { width: 12px; height: 12px; vertical-align: -1.5px; }
+  /* Köplista & kvitto */
+  nav.tabs button { position: relative; }
+  .nbadge { position: absolute; top: 5px; left: calc(50% + 6px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--danger); color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .cartrow { align-items: flex-start; padding-top: 12px; padding-bottom: 12px; }
+  .cartrow .pr { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .cartrow .pr b { font-size: 16px; white-space: nowrap; }
+  .iconbtn { border: none; background: var(--card2); color: var(--muted); width: 34px; height: 34px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; }
+  .iconbtn .ic-svg { width: 17px; height: 17px; }
+  .cartprice { width: 88px; padding: 6px 10px; font-size: 15px; }
+  #receipt { position: fixed; inset: 0; z-index: 40; background: #fff; color: #111; overflow: auto; padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 24px); font-size: 17px; }
+  #receipt .rc { max-width: 640px; margin: 0 auto; }
+  #receipt .rc-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  #receipt .rc-head b { font-size: 24px; } #receipt .rc-date { color: #666; font-size: 14px; }
+  #receipt .rc-head .btn { background: #eee; color: #111; }
+  #receipt table { width: 100%; border-collapse: collapse; }
+  #receipt th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #666; padding: 6px 4px; border-bottom: 2px solid #ddd; }
+  #receipt td { padding: 11px 4px; border-bottom: 1px solid #e5e5e5; vertical-align: top; }
+  #receipt td.num, #receipt th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  #receipt .rc-set { color: #666; font-size: 13px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  #receipt tfoot td { font-size: 21px; font-weight: 800; border-bottom: none; padding-top: 14px; }
+  #receipt .rc-foot { color: #666; font-size: 13px; margin-top: 18px; }
+  kbd { background: var(--line); border-radius: 5px; padding: 1px 6px; font-size: 12px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+</style>
 </head>
 <body>
-    <div class="container">
-        <h1>🎴 MTG Kortjakt</h1>
-        <p class="subtitle">Klistra in din kortlista → Hitta billigaste printings → Sortera per set för pärmjakten</p>
 
-        <!-- STEG 1: Input -->
-        <div id="step1" class="card">
-            <h2>📋 Steg 1: Klistra in din kortlista</h2>
-            <p>Format som stöds: "1 Kortnamn (SET) 123" eller bara "Kortnamn" - en rad per kort</p>
-            <textarea id="cardInput" placeholder="Klistra in din kortlista här...">1 Animar, Soul of Elements (SLD) 1891 *F*
-1 Alchemist's Retrieval (VOW) 47
-1 An Offer You Can't Refuse (SNC) 51
-1 Ancestral Statue (JMP) 458
-1 Autumn's Veil (M12) 164
-1 Lightning Bolt (STA) 42
-1 Sol Ring (MKC) 254
-1 Llanowar Elves (DOM) 168
-1 Beast Whisperer (GRN) 123
-1 Eternal Witness (MMA) 144</textarea>
-            <div class="btn-row">
-                <button class="btn-blue" onclick="parseList()">📝 Parsa lista</button>
-                <span id="parseResult"></span>
-            </div>
-            <div id="parsedCards" class="parsed-list hidden">
-                <strong>Kort som kommer sökas:</strong>
-                <div class="cards" id="parsedCardList"></div>
-            </div>
-        </div>
+<header>
+  <div class="bar">
+    <h1><span class="ic" data-icon="cards"></span> MTG Kortjakt</h1>
+    <span class="stats" id="hdr-stats"></span>
+  </div>
+  <div class="search">
+    <span class="ico" data-icon="search"></span>
+    <input id="q" type="search" inputmode="search" autocomplete="off" placeholder="Sök kort eller set (t.ex. MH2, bolt)">
+    <button id="q-clear" aria-label="Rensa sökning" hidden>×</button>
+  </div>
+</header>
 
-        <!-- STEG 2: Hämta data -->
-        <div id="step2" class="card hidden">
-            <h2>🔍 Steg 2: Hämta prisdata</h2>
-            <p id="fetchInfo">Hämtar alla printings med EUR-priser från Scryfall</p>
-            <button class="btn-green" onclick="fetchData()">🚀 Hämta kortdata</button>
-        </div>
+<main id="main"></main>
 
-        <!-- Loading -->
-        <div id="loading" class="card hidden">
-            <div class="progress-text">
-                <span>Hämtar från Scryfall...</span>
-                <span id="progressCount">0/0</span>
-            </div>
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressBar" style="width: 0%"></div>
-            </div>
-            <p id="progressCard" style="text-align: center; color: #6b7280;"></p>
-        </div>
+<nav class="tabs" id="tabs">
+  <button data-tab="set"><span class="ic" data-icon="folder"></span>Set</button>
+  <button data-tab="cards"><span class="ic" data-icon="layers"></span>Kort</button>
+  <button data-tab="decks"><span class="ic" data-icon="library"></span>Decks</button>
+  <button data-tab="cart"><span class="ic" data-icon="cart"></span>Köp<span class="nbadge" id="cart-n" hidden></span></button>
+  <button data-tab="more"><span class="ic" data-icon="sliders"></span>Mer</button>
+</nav>
 
-        <!-- Resultat -->
-        <div id="results" class="hidden">
-            <div class="card">
-                <div class="top-row">
-                    <div class="stats">
-                        <div class="stat">
-                            <div class="stat-label">Unika kort</div>
-                            <div class="stat-value" id="statUnique">0</div>
-                        </div>
-                        <div class="stat">
-                            <div class="stat-label">Totalt (billigaste)</div>
-                            <div class="stat-value green" id="statTotal">0.00 €</div>
-                        </div>
-                        <div class="stat">
-                            <div class="stat-label">Set att kolla</div>
-                            <div class="stat-value blue" id="statSets">0</div>
-                        </div>
-                    </div>
-                    <div class="btn-row">
-                        <button class="btn-green" onclick="exportCSV()">📥 CSV</button>
-                        <button class="btn-gray" onclick="resetAll()">🔄 Ny lista</button>
-                    </div>
-                </div>
-                <div id="warnings" class="warning hidden"></div>
-            </div>
+<div id="progress" hidden></div>
+<div id="toast"></div>
+<div id="modal" hidden></div>
+<div id="receipt" hidden></div>
 
-            <div class="tabs">
-                <button class="tab active" data-view="shopping" onclick="switchView('shopping')">📝 Shoppinglista</button>
-                <button class="tab" data-view="priskoll" onclick="switchView('priskoll')">💰 Priskoll</button>
-                <button class="tab" data-view="perSet" onclick="switchView('perSet')">📁 Per Set</button>
-            </div>
+<script>
+'use strict';
 
-            <!-- Filter för Per Set -->
-            <div id="filterBar" class="filter-bar hidden">
-                <div class="filter-group">
-                    <span class="filter-label">🎯 Visa printings:</span>
-                    <select id="filterPrintings" class="filter-select" onchange="renderPerSet()">
-                        <option value="all">Alla printings</option>
-                        <option value="1" selected>Bara billigaste</option>
-                        <option value="2">Top 2 billigaste</option>
-                        <option value="3">Top 3 billigaste</option>
-                        <option value="5">Top 5 billigaste</option>
-                    </select>
-                </div>
-                <span class="filter-info" id="filterInfo"></span>
-            </div>
+// ---------- Ikoner (Lucide-stil, inline SVG) ----------
+const ICONS = {
+  cards: '<rect x="3" y="5" width="13" height="17" rx="2"/><path d="M8 5V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2h-1"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  'search-x': '<path d="m13.5 8.5-5 5"/><path d="m8.5 8.5 5 5"/><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  layers: '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
+  library: '<path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>',
+  sliders: '<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>',
+  star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  'check-circle': '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  pencil: '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  save: '<path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>',
+  copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
+  refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  cloud: '<path d="M12 13v8l-4-4"/><path d="m12 21 4-4"/><path d="M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284"/>',
+  sparkles: '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>',
+  alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  chevron: '<path d="m9 18 6-6-6-6"/>',
+  image: '<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
+  coins: '<circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/>',
+  wrench: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+  bulb: '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>',
+  cart: '<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>',
+  receipt: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>',
+};
+const I = (name, cls = '') => `<svg class="ic-svg ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+const STAR = I('star', 'fill star');
 
-            <div id="viewShopping"></div>
-            <div id="viewPriskoll" class="hidden"></div>
-            <div id="viewPerSet" class="hidden"></div>
-        </div>
+// ---------- Standardlista (din ursprungliga) ----------
+const DEFAULT_CARDS = [
+  "_____ Goblin", "Alchemist's Retrieval", "An Offer You Can't Refuse", "Ancestral Statue", "Autumn's Veil",
+  "Azure Beastbinder", "Beast Whisperer", "Bond Beetle", "Bring to Light", "Cankerbloom", "Cascade Bluffs", "Cloud of Faeries",
+  "Command Tower", "Copperline Gorge", "Den Protector", "Destiny Spinner", "Dispel", "Eldritch Evolution", "Elvish Mystic",
+  "Elvish Spirit Guide", "Eternal Witness", "Evolution Witness", "Exotic Orchard", "Fauna Shaman", "Fiery Islet",
+  "Flare of Cultivation", "Flare of Duplication", "Flooded Grove", "Fyndhorn Elves", "Gemstone Mine", "Goblin Cratermaker",
+  "Goldhound", "Grazilaxx, Illithid Scholar", "Imperial Recruiter", "Karplusan Forest", "Lightning Bolt", "Llanowar Elves",
+  "Malevolent Hermit", "Manglehorn", "Mezzio Mugger", "Miscast", "Myr Scrapling", "Nature's Rhythm", "Neoform",
+  "Ohran Frostfang", "Outland Liberator", "Peregrine Drake", "Phyrexian Metamorph", "Phyrexian Revoker",
+  "Professional Face-Breaker", "Radagast the Brown", "Reclamation Sage", "Scour for Scrap", "Shared Summons", "Shivan Reef",
+  "Simian Spirit Guide", "Siren Stormtamer", "Skirk Prospector", "Slithermuse", "Sol Ring", "Spell Pierce", "Spellseeker",
+  "Starwinder", "Strike It Rich", "Tarnished Citadel", "Temur Sabertooth", "Thran Quarry", "Tinder Wall",
+  "Toski, Bearer of Secrets", "Transit Mage", "Utopia Sprawl", "Vizier of the Menagerie", "Volatile Stormdrake",
+  "Walking Ballista", "Waterlogged Grove", "Weird Harvest", "Wild Cantor", "Witty Roastmaster", "Yavimaya Coast",
+  "Yusri, Fortune's Flame", "Animar, Soul of Elements"
+];
+
+// ---------- Lagring ----------
+const LS = { list: 'kortjakt.list', decks: 'kortjakt.decks', cache: 'kortjakt.cache', found: 'kortjakt.found', cart: 'kortjakt.cart', settings: 'kortjakt.settings', tab: 'kortjakt.tab', open: 'kortjakt.open', setIcons: 'kortjakt.seticons' };
+const load = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
+const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { toast('Kunde inte spara lokalt (fullt lagringsutrymme?)'); } };
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+function loadDecks() {
+  const d = load(LS.decks, null);
+  if (Array.isArray(d)) return d;
+  // Migrering från äldre version (en fri kortlista) – blir ett deck
+  const old = load(LS.list, null);
+  const deck = { id: uid(), name: 'Kortlista', text: old != null ? old : DEFAULT_CARDS.join('\n'), have: {}, created: Date.now() };
+  try { localStorage.removeItem(LS.list); } catch (e) {}
+  return [deck];
+}
+
+const state = {
+  decks: loadDecks(),
+  cache: load(LS.cache, {}),
+  found: load(LS.found, {}),
+  cart: load(LS.cart, []),
+  setIcons: load(LS.setIcons, { map: {}, fetchedAt: 0 }),
+  receipt: false,
+  settings: Object.assign({ sekRate: 11.1, rateDate: null, showSek: true, hideFound: false, onlyCheapest: false, setSort: 'count', cardSort: 'price', deckFilter: null }, load(LS.settings, {})),
+  tab: load(LS.tab, 'set'),
+  open: load(LS.open, {}),
+  query: '',
+  fetching: null,
+  modal: null,
+  deckId: null,
+};
+if (state.tab === 'list') state.tab = 'decks';
+save(LS.decks, state.decks);
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const norm = s => s.toLowerCase().replace(/[’‘]/g, "'").replace(/\s+/g, ' ').trim();
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const price = p => p.eur != null ? p.eur : p.eurFoil;
+const fmtEur = v => v == null ? '–' : v.toFixed(2).replace('.', ',') + ' €';
+const fmtSek = v => v == null ? '' : Math.round(v * state.settings.sekRate).toLocaleString('sv-SE') + ' kr';
+const priceClass = v => v == null ? 'n' : v < 1 ? 'g' : v <= 5 ? 'y' : v <= 20 ? 'o' : 'r';
+const badge = p => { const v = price(p); return `<span class="badge ${priceClass(v)}">${fmtEur(v)}${p.eur == null && p.eurFoil != null ? ' ' + I('sparkles') : ''}</span>`; };
+const rar = r => `<span class="rar ${esc(r)}" title="${esc(r)}"></span>`;
+
+function toast(msg, ms = 2200) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+// ---------- Listtolkning ----------
+// Stödjer: "Lightning Bolt", "4 Lightning Bolt", "4x Lightning Bolt", "Lightning Bolt x4",
+// Arena/Moxfield-export "4 Lightning Bolt (M10) 146 *F*", kommentarer med # (eller // först på raden)
+function parseList(text) {
+  const out = [], seen = new Map();
+  for (const raw of (text || '').split('\n')) {
+    let line = raw.replace(/^\s*\/\/.*$/, '').replace(/(^|\s)#.*$/, '').trim();
+    if (!line) continue;
+    if (/^(deck|main|mainboard|sideboard|commander|maybeboard|companion|tokens?)\s*:?(\s*\(\d+\))?$/i.test(line)) continue;
+    let qty = 1, m;
+    if ((m = line.match(/^(\d+)\s*[xX]?\s+(.+)$/))) { qty = +m[1]; line = m[2]; }
+    else if ((m = line.match(/^(.+?)\s+[xX](\d+)$/))) { line = m[1]; qty = +m[2]; }
+    line = line.replace(/\s*(\*F\*|\*E\*|\((foil|etched)\)|\[(foil|etched)\])\s*$/i, '');
+    line = line.replace(/\s+\([A-Za-z0-9]{2,6}\)\s*[\w★-]*$/, '').trim();
+    if (!line) continue;
+    const key = norm(line);
+    if (seen.has(key)) { seen.get(key).qty += qty; continue; }
+    const e = { input: line, key, qty }; seen.set(key, e); out.push(e);
+  }
+  return out;
+}
+
+// Alla saknade kort från alla decks, hopslaget per kortnamn
+// deckFilter = visa bara ett visst deck (tillfälligt filter i Set/Kort). d.active === false = decket ingår inte alls.
+function wantEntries(deckFilter) {
+  const map = new Map();
+  for (const d of state.decks) {
+    if (d.active === false) continue;
+    if (deckFilter && d.id !== deckFilter) continue;
+    for (const e of parseList(d.text)) {
+    const need = Math.max(0, e.qty - (d.have[e.key] || 0));
+    if (!need) continue;
+    let w = map.get(e.key);
+    if (!w) { w = { input: e.input, key: e.key, qty: 0, sources: [] }; map.set(e.key, w); }
+    w.qty += need; w.sources.push({ deck: d, need });
+  } }
+  return [...map.values()];
+}
+const activeDecks = () => state.decks.filter(d => d.active !== false);
+
+// ---------- Scryfall ----------
+// Strategi för att hålla antalet anrop lågt (Scryfall rate-limitar hårt, och deras
+// 429-svar saknar CORS-headers så webbläsaren ser bara "Failed to fetch"):
+//  1. POST /cards/collection  – identifierar upp till 75 kort per anrop (exakta namn)
+//  2. GET  /cards/named?fuzzy – bara för kort som inte hittades exakt (stavfel)
+//  3. GET  /cards/search q=(oracleid:a or oracleid:b …) game:paper – printings för 12 kort per anrop
+const DELAY = 150;
+const CHUNK = 12;
+const oid = c => c.oracle_id || (c.card_faces && c.card_faces[0] && c.card_faces[0].oracle_id) || '';
+const isNetErr = e => (e instanceof TypeError) || e.status === 429 || e.status >= 500;
+const errMsg = e => e.status === 404 ? 'Hittades inte på Scryfall (stavning?)'
+  : !navigator.onLine ? 'Ingen nätverksanslutning'
+  : isNetErr(e) ? 'Scryfall svarade inte (troligen rate limit) – försök igen om en minut'
+  : 'API-fel: ' + e.message;
+
+async function sfReq(url, opts) {
+  const r = await fetch(url, opts);
+  let data = null; try { data = await r.json(); } catch (e) {}
+  if (!r.ok) { const err = new Error((data && data.details) || ('HTTP ' + r.status)); err.status = r.status; throw err; }
+  return data;
+}
+const sfGet = url => sfReq(url, { headers: { Accept: 'application/json' } });
+const sfPost = (url, body) => sfReq(url, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+async function withBackoff(fn, ctl) {
+  const waits = [2000, 6000, 15000, 40000];
+  for (let i = 0; ; i++) {
+    try { return await fn(); }
+    catch (e) {
+      if (!isNetErr(e) || i >= waits.length || ctl.cancelled) throw e;
+      ctl.note(`Scryfall bromsar – väntar ${waits[i] / 1000} s och försöker igen…`);
+      await sleep(waits[i]);
+      ctl.note('');
+    }
+  }
+}
+
+function slimPrint(c) {
+  const img = c.image_uris ? c.image_uris : (c.card_faces && c.card_faces[0] && c.card_faces[0].image_uris) || {};
+  const p = c.prices || {};
+  return {
+    set: (c.set || '').toUpperCase(), setName: c.set_name || '', setType: c.set_type || '',
+    cn: c.collector_number || '', rarity: c.rarity || '',
+    eur: p.eur ? +p.eur : null, eurFoil: p.eur_foil ? +p.eur_foil : null,
+    cm: (c.purchase_uris && c.purchase_uris.cardmarket) || '', sf: c.scryfall_uri || '',
+    img: img.small || '', imgN: img.normal || '', released: c.released_at || '',
+    tags: [].concat(c.frame_effects || [], c.promo_types || [], c.border_color === 'borderless' ? ['borderless'] : []).filter(t => t !== 'legendary'),
+    foilOnly: Array.isArray(c.finishes) && !c.finishes.includes('nonfoil'),
+  };
+}
+
+async function fetchAll(onlyMissing) {
+  if (state.fetching) return;
+  const entries = wantEntries();
+  const todo = entries.filter(e => !onlyMissing || !state.cache[e.key] || state.cache[e.key].error);
+  if (!todo.length) { toast(entries.length ? 'Alla kort har redan prisdata' : 'Inga saknade kort att hämta'); return; }
+  if (!navigator.onLine) { toast('Du verkar vara offline'); return; }
+
+  const start = Date.now();
+  const ctl = { cancelled: false, note: t => { if (state.fetching) { state.fetching.note = t; renderProgress(); } } };
+  const failed = {};
+  const setProgress = (name) => {
+    if (!state.fetching) return;
+    state.fetching.current = todo.filter(e => state.cache[e.key] && state.cache[e.key].fetchedAt >= start).length + Object.keys(failed).length;
+    if (name != null) state.fetching.name = name;
+    renderProgress();
+  };
+  state.fetching = { current: 0, total: todo.length, name: 'Identifierar kort…', note: '', cancel: () => { ctl.cancelled = true; } };
+  renderProgress();
+
+  const resolved = [];
+  try {
+    let pending = [...todo];
+    for (let i = 0; i < todo.length && !ctl.cancelled; i += 75) {
+      const chunk = todo.slice(i, i + 75);
+      const res = await withBackoff(() => sfPost('https://api.scryfall.com/cards/collection', { identifiers: chunk.map(e => ({ name: e.input })) }), ctl);
+      const byKey = new Map();
+      for (const c of res.data || []) {
+        byKey.set(norm(c.name), c);
+        const front = norm(c.name.split(' // ')[0]); if (!byKey.has(front)) byKey.set(front, c);
+      }
+      for (const e of chunk) { const c = byKey.get(e.key); if (c) { resolved.push({ entry: e, name: c.name, oracleId: oid(c) }); pending = pending.filter(x => x !== e); } }
+      await sleep(DELAY);
+    }
+    for (const e of pending) {
+      if (ctl.cancelled) break;
+      setProgress('Söker: ' + e.input);
+      try {
+        const c = await withBackoff(() => sfGet('https://api.scryfall.com/cards/named?fuzzy=' + encodeURIComponent(e.input)), ctl);
+        resolved.push({ entry: e, name: c.name, oracleId: oid(c) });
+      } catch (err) { failed[e.key] = errMsg(err); }
+      await sleep(DELAY);
+    }
+    for (let i = 0; i < resolved.length && !ctl.cancelled; i += CHUNK) {
+      const chunk = resolved.slice(i, i + CHUNK);
+      setProgress('Hämtar printings: ' + chunk.map(r => r.name).join(', '));
+      const ids = [...new Set(chunk.map(r => r.oracleId).filter(Boolean))];
+      const groups = {};
+      let url = 'https://api.scryfall.com/cards/search?unique=prints&order=released&q=' + encodeURIComponent('(' + ids.map(x => 'oracleid:' + x).join(' or ') + ') game:paper');
+      try {
+        while (url && !ctl.cancelled) {
+          const page = await withBackoff(() => sfGet(url), ctl);
+          for (const c of page.data || []) {
+            if (c.digital || !(c.games || []).includes('paper')) continue;
+            const s = slimPrint(c);
+            if (s.eur != null || s.eurFoil != null) (groups[oid(c)] = groups[oid(c)] || []).push(s);
+          }
+          url = page.has_more ? page.next_page : null;
+          await sleep(DELAY);
+        }
+        if (ctl.cancelled && url) break;
+        for (const r of chunk) {
+          const prints = (groups[r.oracleId] || []).sort((a, b) => price(a) - price(b));
+          state.cache[r.entry.key] = { name: r.name, oracleId: r.oracleId, prints, fetchedAt: Date.now(), error: prints.length ? null : 'Inga pappersprint med Cardmarket-pris' };
+        }
+      } catch (err) {
+        if (err.status === 404) for (const r of chunk) state.cache[r.entry.key] = { name: r.name, oracleId: r.oracleId, prints: [], fetchedAt: Date.now(), error: 'Inga pappersprint med Cardmarket-pris' };
+        else for (const r of chunk) failed[r.entry.key] = errMsg(err);
+      }
+      save(LS.cache, state.cache); setProgress(null); render();
+    }
+  } catch (err) {
+    for (const e of todo) if (!(state.cache[e.key] && state.cache[e.key].fetchedAt >= start)) failed[e.key] = failed[e.key] || errMsg(err);
+  }
+  for (const k of Object.keys(failed)) {
+    if (state.cache[k] && state.cache[k].fetchedAt >= start && !state.cache[k].error) continue;
+    state.cache[k] = { error: failed[k], prints: [], fetchedAt: Date.now() };
+  }
+  save(LS.cache, state.cache);
+  const cancelled = ctl.cancelled;
+  state.fetching = null;
+  renderProgress(); render();
+  const bad = todo.filter(e => state.cache[e.key] && state.cache[e.key].error).length;
+  toast(cancelled ? 'Avbrutet – det som hämtats är sparat' : bad ? `Klart – ${bad} kort gick inte att hämta (se Decks)` : 'Klart!', 3500);
+}
+
+// Set-symboler: Scryfall har en SVG per set på svgs.scryfall.io/sets/<fil>.svg. Filen heter oftast som
+// setkoden, men inte alltid (t.ex. PLST -> planeswalker, SLD -> star). Registret hämtas en gång per månad.
+async function fetchSetIcons() {
+  try {
+    const d = await sfGet('https://api.scryfall.com/sets');
+    const map = {};
+    for (const s of d.data || []) {
+      const f = (s.icon_svg_uri || '').replace(/^.*\/sets\//, '').replace(/\?.*$/, '').replace(/\.svg$/, '');
+      if (f && f !== s.code) map[s.code.toUpperCase()] = f;
+    }
+    state.setIcons = { map, fetchedAt: Date.now() }; save(LS.setIcons, state.setIcons); render();
+  } catch (e) { /* ikoner är kosmetiska – tyst fel */ }
+}
+const setIconUrl = code => `https://svgs.scryfall.io/sets/${(state.setIcons.map || {})[code] || code.toLowerCase()}.svg`;
+// Visar setsymbolen; om bilden inte kan laddas (okänt set, offline utan cache) visas setkoden i stället.
+const setIcon = (code, cls = '') => { const u = setIconUrl(code); return `<span class="seticon ${cls}"><i style="--icon:url('${u}')"></i><img src="${u}" alt="" loading="lazy" onerror="this.parentNode.classList.add('noicon')"><b>${esc(code)}</b></span>`; };
+
+async function fetchRate(silent) {
+  try {
+    const d = await (await fetch('https://api.frankfurter.dev/v1/latest?base=EUR&symbols=SEK')).json();
+    if (d && d.rates && d.rates.SEK) {
+      state.settings.sekRate = +d.rates.SEK; state.settings.rateDate = d.date; save(LS.settings, state.settings);
+      if (!silent) toast(`Kurs uppdaterad: 1 € = ${state.settings.sekRate.toFixed(2)} kr`);
+      render();
+    }
+  } catch (e) { if (!silent) toast('Kunde inte hämta valutakurs – ange manuellt'); }
+}
+
+// ---------- Datamodell ----------
+function model() {
+  if (state.settings.deckFilter && !activeDecks().some(d => d.id === state.settings.deckFilter)) { state.settings.deckFilter = null; save(LS.settings, state.settings); }
+  const entries = wantEntries(state.settings.deckFilter);
+  const cards = entries.map(e => {
+    const c = state.cache[e.key];
+    const prints = (c && c.prints) || [];
+    return {
+      ...e, name: (c && c.name) || e.input, prints, cheapest: prints[0] || null,
+      fetched: !!c, error: c && c.error, fetchedAt: c && c.fetchedAt,
+      approx: !!(c && c.name) && norm(c.name) !== e.key && norm(c.name.split(' // ')[0]) !== e.key,
+      found: !!state.found[e.key],
+    };
+  });
+  const sets = {};
+  for (const card of cards) for (const p of card.prints) {
+    const s = sets[p.set] || (sets[p.set] = { code: p.set, name: p.setName, released: p.released, items: [], keys: new Set() });
+    s.items.push({ card, print: p, cheapest: p === card.cheapest });
+    s.keys.add(card.key);
+    if (p.released && (!s.released || p.released < s.released)) s.released = p.released;
+  }
+  for (const s of Object.values(sets)) {
+    s.count = s.keys.size;
+    s.stars = s.items.filter(i => i.cheapest).length;
+    s.foundCount = new Set(s.items.filter(i => i.card.found).map(i => i.card.key)).size;
+    s.items.sort((a, b) => a.card.name.localeCompare(b.card.name, 'sv') || price(a.print) - price(b.print));
+  }
+  return { cards, sets: Object.values(sets) };
+}
+
+function deckStats(d) {
+  const entries = parseList(d.text);
+  let total = 0, owned = 0, missing = 0, cost = 0, unpriced = 0;
+  for (const e of entries) {
+    const h = Math.min(e.qty, d.have[e.key] || 0);
+    total += e.qty; owned += h;
+    const need = e.qty - h;
+    if (need) {
+      missing += need;
+      const c = state.cache[e.key];
+      if (c && c.prints && c.prints.length) cost += price(c.prints[0]) * need; else unpriced++;
+    }
+  }
+  return { entries, total, owned, missing, cost, unpriced, unique: entries.length };
+}
+
+function matchQ(card, q) { return !q || norm(card.name).includes(q) || card.key.includes(q); }
+function matchSetQ(set, q) { return !q || set.code.toLowerCase() === q || set.code.toLowerCase().startsWith(q) || norm(set.name).includes(q); }
+
+// ---------- Rendering ----------
+function render() {
+  const m = model();
+  const q = norm(state.query);
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
+  const total = m.cards.length, found = m.cards.filter(c => c.found).length;
+  $('#hdr-stats').textContent = total ? `${found}/${total} hittade` : state.decks.length ? 'Allt klart' : '';
+  $('#q-clear').hidden = !state.query;
+  let html = '';
+  if (state.tab === 'set') html = viewSets(m, q);
+  else if (state.tab === 'cards') html = viewCards(m, q);
+  else if (state.tab === 'decks') html = state.deckId ? viewDeck(m, q) : viewDecks(m);
+  else if (state.tab === 'cart') html = viewCart(m);
+  else html = viewMore(m);
+  $('#main').innerHTML = html;
+  const cn = state.cart.reduce((s, x) => s + x.qty, 0); const cb = $('#cart-n'); cb.hidden = !cn; cb.textContent = cn;
+  document.querySelectorAll('input[data-partial]').forEach(i => { i.indeterminate = true; });
+  renderModal(m);
+  renderReceipt();
+}
+
+// ---------- Köplista ----------
+const cartTotal = () => state.cart.reduce((s, x) => s + (x.price || 0) * x.qty, 0);
+const cartCount = () => state.cart.reduce((s, x) => s + x.qty, 0);
+const fmtKr = v => Math.round(v).toLocaleString('sv-SE') + ' kr';
+
+function viewCart(m) {
+  const items = state.cart;
+  if (!items.length) return `<div class="card empty"><div class="big">${I('cart')}</div><p>Köplistan är tom.</p>
+    <p class="muted">När du hittar ett kort i butiken: tryck på kortet, skriv in butikens pris och tryck "Lägg i köplistan". Här samlas allt så kassan bara behöver slå in det.</p></div>`;
+  const total = cartTotal();
+  const cmTotal = items.reduce((s, x) => s + (x.cm || 0) * x.qty, 0) * state.settings.sekRate;
+  const noPrice = items.filter(x => !x.price).length;
+  const diff = total - cmTotal;
+  let html = `<div class="hero"><div class="grid">
+    <div><b>${cartCount()}</b><small>kort i köplistan</small></div>
+    <div><b>${fmtKr(total)}</b><small>att betala${noPrice ? ` · ${noPrice} utan pris` : ''}</small></div>
+    <div><b>${cmTotal ? (diff <= 0 ? '−' : '+') + fmtKr(Math.abs(diff)) : '–'}</b><small>mot Cardmarket-trend</small></div>
+  </div></div>
+  <div class="btnrow" style="margin-bottom:12px"><button class="btn" data-action="receipt-show">${I('receipt')} Visa för kassan</button><button class="btn sec" data-action="cart-copy">${I('copy')} Kopiera</button></div>
+  <div class="card">`;
+  for (const x of items) {
+    html += `<div class="row cartrow">
+      <div class="grow" style="cursor:default">
+        <div class="nm">${esc(x.name)}</div>
+        <div class="sub"><span class="setcode">${esc(x.set)}</span><span>#${esc(x.cn)} · ${esc(x.setName)}</span>${x.cm ? `<span>CM ${fmtSek(x.cm)}/st</span>` : ''}</div>
+        <div class="inline" style="margin-top:8px"><div class="have"><div class="step"><button data-action="cart-qty" data-id="${esc(x.id)}" data-v="-1" aria-label="Färre">−</button><span>${x.qty}</span><button data-action="cart-qty" data-id="${esc(x.id)}" data-v="1" aria-label="Fler">+</button></div></div>
+          <input class="txt cartprice" data-id="${esc(x.id)}" type="number" inputmode="decimal" placeholder="pris" value="${x.price != null ? x.price : ''}" aria-label="Pris per styck"><span class="muted">kr/st</span></div>
+      </div>
+      <div class="pr"><b>${x.price ? fmtKr(x.price * x.qty) : '–'}</b><button class="iconbtn" data-action="cart-remove" data-id="${esc(x.id)}" aria-label="Ta bort">${I('trash')}</button></div>
+    </div>`;
+  }
+  html += `</div>
+  <div class="card"><div class="pad"><h2>${I('check-circle')} När du har betalat</h2><p class="muted">Bokför korten som ägda i dina decks och töm köplistan.</p>
+    <button class="btn ok wide" data-action="cart-done">${I('check-circle')} Köpt – bokför som ägda</button>
+    <button class="btn ghost wide" data-action="cart-clear">Töm köplistan</button></div></div>`;
+  return html;
+}
+
+function cartText() {
+  const items = [...state.cart].sort((a, b) => a.name.localeCompare(b.name, 'sv'));
+  const lines = [`Köplista ${new Date().toLocaleDateString('sv-SE')}`];
+  for (const x of items) lines.push(`${x.qty} × ${x.name} (${x.set} #${x.cn})${x.price ? ` à ${x.price} kr = ${Math.round(x.price * x.qty)} kr` : ''}`);
+  lines.push(`Totalt: ${cartCount()} kort, ${fmtKr(cartTotal())}`);
+  return lines.join('\n');
+}
+
+function renderReceipt() {
+  const el = $('#receipt');
+  if (!state.receipt) { el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  const items = [...state.cart].sort((a, b) => a.name.localeCompare(b.name, 'sv'));
+  el.innerHTML = `<div class="rc">
+    <div class="rc-head"><div><b>Köplista</b><div class="rc-date">${new Date().toLocaleDateString('sv-SE')} · ${cartCount()} kort</div></div><button class="btn sm" data-action="receipt-close">Stäng</button></div>
+    <table><thead><tr><th>Kort</th><th class="num">Antal</th><th class="num">à</th><th class="num">Summa</th></tr></thead><tbody>
+    ${items.map(x => `<tr><td>${esc(x.name)}<div class="rc-set">${esc(x.set)} #${esc(x.cn)} · ${esc(x.setName)}</div></td><td class="num">${x.qty}</td><td class="num">${x.price ? x.price + ' kr' : '?'}</td><td class="num"><b>${x.price ? fmtKr(x.price * x.qty) : '?'}</b></td></tr>`).join('')}
+    </tbody><tfoot><tr><td colspan="3">Totalt</td><td class="num">${fmtKr(cartTotal())}</td></tr></tfoot></table>
+    <p class="rc-foot">Priser enligt butikens prislappar. ${items.some(x => !x.price) ? 'Rader med ? saknar pris.' : ''}</p>
+  </div>`;
+}
+
+function cartDone() {
+  const keys = new Set(state.cart.map(x => x.key));
+  let n = 0;
+  for (const d of state.decks) for (const e of parseList(d.text)) if (keys.has(e.key) && (d.have[e.key] || 0) < e.qty) { d.have[e.key] = e.qty; n++; }
+  for (const k of keys) delete state.found[k];
+  state.cart = [];
+  save(LS.decks, state.decks); save(LS.found, state.found); save(LS.cart, state.cart);
+  render(); toast(`${keys.size} kort bokförda som ägda (${n} deckrader)`);
+}
+
+function hero(m) {
+  const left = m.cards.filter(c => !c.found && c.cheapest);
+  const sum = left.reduce((s, c) => s + price(c.cheapest) * c.qty, 0);
+  const found = m.cards.filter(c => c.found).length;
+  const unfetched = m.cards.filter(c => !c.fetched).length;
+  const pct = m.cards.length ? Math.round((found / m.cards.length) * 100) : 0;
+  return `<div class="hero"><div class="grid">
+    <div><b>${m.cards.length - found}</b><small>kort kvar att hitta</small></div>
+    <div><b>${fmtEur(sum)}</b><small>billigast, kvar${state.settings.showSek ? ' · ' + fmtSek(sum) : ''}</small></div>
+    <div><b>${m.sets.filter(s => s.stars).length}</b><small>set med billigast av ${m.sets.length}</small></div>
+  </div>
+  <div class="track"><div class="fill" style="width:${pct}%"></div></div>
+  <div class="foot"><span>${found} hittade</span><span>${pct} %</span></div></div>
+  ${unfetched ? `<div class="note warn">${unfetched} kort saknar prisdata · <a href="#" data-action="fetch-missing"><b>Hämta nu</b></a></div>` : ''}`;
+}
+
+function emptyState(m) {
+  if (!m.cards.length) {
+    return `<div class="card empty"><div class="big">${state.decks.length ? I('check-circle') : I('library')}</div>
+      <p>${state.decks.length ? 'Inga kort saknas – alla decks är kompletta.' : 'Börja med att lägga till ett deck eller en kortlista.'}</p>
+      <button class="btn" data-action="tab" data-tab="decks">${state.decks.length ? 'Till dina decks' : I('plus') + ' Lägg till deck'}</button></div>`;
+  }
+  return `<div class="card empty"><div class="big">${I('cloud')}</div><p><b>${m.cards.length} kort</b> saknas till dina decks, men inga priser är hämtade än.</p>
+    <button class="btn" data-action="fetch-missing">${I('cloud')} Hämta priser från Scryfall</button>
+    <p class="muted" style="margin-top:12px">Tar några sekunder. Sparas i mobilen så du slipper göra om det i butiken.</p></div>`;
+}
+
+function thumb(p, key) {
+  return p && p.img ? `<img class="thumb" src="${esc(p.img)}" alt="" loading="lazy" data-action="detail" data-key="${esc(key)}">` : `<div class="thumb empty">${I('image')}</div>`;
+}
+
+function cardRow(card, p, opts = {}) {
+  const sub = [];
+  if (opts.showSet) sub.push(`<span class="setcode">${esc(p.set)}</span>`);
+  sub.push(`<span>${rar(p.rarity)} #${esc(p.cn)}</span>`);
+  if (p.foilOnly) sub.push('<span>endast foil</span>'); else if (p.eur == null && p.eurFoil != null) sub.push('<span>foilpris</span>');
+  if (p.tags.length) sub.push(`<span>${esc(p.tags.join(', '))}</span>`);
+  if (opts.alts) sub.push(`<span class="muted">${opts.alts}</span>`);
+  const v = price(p);
+  const decks = (card.sources.length > 1 ? `<span class="pill accent" title="${esc(card.sources.map(s => s.deck.name).join(', '))}">${card.sources.length} decks</span>` : '')
+    + (state.cart.some(x => x.key === card.key) ? ` <span class="pill ok" title="I köplistan">${I('cart')}</span>` : '');
+  return `<div class="row ${card.found ? 'found' : ''} ${opts.cheapest ? 'cheap' : ''}">
+    <input type="checkbox" class="chk" data-action="found" data-key="${esc(card.key)}" ${card.found ? 'checked' : ''} aria-label="Hittad">
+    ${thumb(p, card.key)}
+    <div class="grow" data-action="detail" data-key="${esc(card.key)}">
+      <div class="nm">${opts.cheapest ? STAR + ' ' : ''}${esc(card.name)}${card.qty > 1 ? ` <span class="pill">×${card.qty}</span>` : ''} ${decks}${card.approx ? ` <span class="pill warn" title="Fuzzy-träff">≈ ${esc(card.input)}</span>` : ''}</div>
+      <div class="sub">${sub.join('')}</div>
     </div>
+    <div class="pr">${badge(p)}${state.settings.showSek ? `<span class="sek">${fmtSek(v)}</span>` : ''}</div>
+  </div>`;
+}
 
-    <script>
-        const BASIC_LANDS = ['Forest', 'Island', 'Mountain', 'Plains', 'Swamp', 'Wastes', 'Snow-Covered Forest', 'Snow-Covered Island', 'Snow-Covered Mountain', 'Snow-Covered Plains', 'Snow-Covered Swamp'];
-        
-        const COLOR_ORDER = { 'W': 1, 'U': 2, 'B': 3, 'R': 4, 'G': 5, 'C': 6, 'M': 7 };
-        const COLOR_NAMES = { 'W': 'Vit', 'U': 'Blå', 'B': 'Svart', 'R': 'Röd', 'G': 'Grön', 'C': 'Färglös', 'M': 'Flerfärgad' };
-        const RARITY_ORDER = { 'common': 1, 'uncommon': 2, 'rare': 3, 'mythic': 4, 'special': 5, 'bonus': 6 };
-        
-        let cardList = [];
-        let allCards = [];
-        let errorCards = [];
-        let setData = {};
-        let cardPriceRanks = {}; // Sparar rank per kort+set
+function deckChips() {
+  const decks = activeDecks();
+  if (decks.length < 2) return '';
+  const f = state.settings.deckFilter;
+  return `<div class="chips deckchips"><span class="muted" style="flex-shrink:0">Visa:</span>
+    <button class="chip ${!f ? 'on' : ''}" data-action="deckfilter" data-id="">Alla decks</button>
+    ${decks.map(d => `<button class="chip ${f === d.id ? 'on' : ''}" data-action="deckfilter" data-id="${esc(d.id)}">${esc(d.name)}</button>`).join('')}
+  </div>`;
+}
 
-        function parseList() {
-            const text = document.getElementById('cardInput').value;
-            const cards = new Set();
-            
-            for (const line of text.split('\n')) {
-                let cleaned = line.trim();
-                if (!cleaned) continue;
-                
-                cleaned = cleaned.replace(/^\d+x?\s+/, '');
-                
-                const parenIndex = cleaned.indexOf('(');
-                if (parenIndex > 0) {
-                    cleaned = cleaned.substring(0, parenIndex).trim();
-                }
-                
-                cleaned = cleaned.replace(/\s*\*.*$/, '').trim();
-                
-                if (cleaned && !BASIC_LANDS.includes(cleaned)) {
-                    cards.add(cleaned);
-                }
-            }
-            
-            cardList = Array.from(cards).sort();
-            
-            if (cardList.length > 0) {
-                document.getElementById('parseResult').innerHTML = `<span style="color: #16a34a; font-weight: 600;">✓ ${cardList.length} kort hittade</span>`;
-                document.getElementById('parsedCards').classList.remove('hidden');
-                document.getElementById('parsedCardList').textContent = cardList.join(', ');
-                document.getElementById('step2').classList.remove('hidden');
-                document.getElementById('fetchInfo').textContent = `Hämtar alla printings med EUR-priser från Scryfall (tar ca ${Math.ceil(cardList.length * 0.15)} sekunder)`;
-            } else {
-                document.getElementById('parseResult').innerHTML = `<span style="color: #dc2626;">Inga kort hittades</span>`;
-            }
-        }
+function viewSets(m, q) {
+  if (!m.cards.some(c => c.fetched)) return deckChips() + emptyState(m);
+  const s = state.settings;
+  let sets = m.sets.map(set => {
+    const whole = matchSetQ(set, q);
+    const items = set.items.filter(i => (whole || matchQ(i.card, q)) && !(s.hideFound && i.card.found) && !(s.onlyCheapest && !i.cheapest));
+    return { set, items };
+  }).filter(x => x.items.length);
+  const sorters = {
+    count: (a, b) => b.set.count - a.set.count || b.set.stars - a.set.stars || a.set.code.localeCompare(b.set.code),
+    stars: (a, b) => b.set.stars - a.set.stars || b.set.count - a.set.count,
+    name: (a, b) => a.set.code.localeCompare(b.set.code),
+    newest: (a, b) => (b.set.released || '').localeCompare(a.set.released || ''),
+  };
+  sets.sort(sorters[s.setSort] || sorters.count);
+  let html = deckChips() + hero(m) + `<div class="chips">
+    ${[['count', 'Flest kort'], ['stars', 'Flest ' + I('star', 'fill')], ['name', 'Setkod'], ['newest', 'Nyast']].map(([k, l]) => `<button class="chip ${s.setSort === k ? 'on' : ''}" data-action="setsort" data-v="${k}">${l}</button>`).join('')}
+    <button class="chip ${s.onlyCheapest ? 'on' : ''}" data-action="togglecheapest" title="Visa bara den billigaste printingen av varje kort">Bara ${I('star', 'fill')}</button>
+    <button class="chip ${s.hideFound ? 'on' : ''}" data-action="togglehide">Dölj hittade</button>
+  </div>`;
+  if (!sets.length) html += `<div class="card empty"><div class="big">${I('search-x')}</div><p>Inget matchar "${esc(state.query)}".</p></div>`;
+  for (const { set, items } of sets) {
+    const open = q ? true : !!state.open[set.code];
+    html += `<details class="set card" data-set="${esc(set.code)}" ${open ? 'open' : ''}>
+      <summary>${setIcon(set.code, 'lg')}<span class="sn"><b>${esc(set.name)}</b><span><span class="mono" style="font-weight:700;color:var(--accent)">${esc(set.code)}</span> · ${esc((set.released || '').slice(0, 4))} · ${set.count} kort</span></span>
+        <span class="pills">${set.stars ? `<span class="pill star">${set.stars} ${I('star', 'fill')}</span>` : ''}${set.foundCount ? `<span class="pill ok">${set.foundCount} ${I('check')}</span>` : ''}</span><span class="chev">${I('chevron')}</span></summary>
+      <div>${items.map(i => cardRow(i.card, i.print, { cheapest: i.cheapest })).join('')}</div></details>`;
+  }
+  return html + `<p class="muted" style="text-align:center;padding:0 10px">${STAR} billigaste printingen · ${I('sparkles')} foilpris · priser = Cardmarket-trend via Scryfall</p>`;
+}
 
-        function getColorIdentity(colors, colorIdentity) {
-            const c = colors && colors.length > 0 ? colors : colorIdentity;
-            if (!c || c.length === 0) return 'C';
-            if (c.length > 1) return 'M';
-            return c[0];
-        }
+function viewCards(m, q) {
+  if (!m.cards.some(c => c.fetched)) return deckChips() + emptyState(m);
+  const s = state.settings;
+  const cards = m.cards.filter(c => matchQ(c, q) && !(s.hideFound && c.found));
+  const sorters = {
+    price: (a, b) => (a.found - b.found) || (price(b.cheapest || {}) || -1) - (price(a.cheapest || {}) || -1),
+    name: (a, b) => a.name.localeCompare(b.name, 'sv'),
+    list: () => 0,
+  };
+  cards.sort(sorters[s.cardSort] || sorters.price);
+  let html = deckChips() + hero(m) + `<div class="chips">
+    ${[['price', 'Dyrast först'], ['name', 'Namn'], ['list', 'Listordning']].map(([k, l]) => `<button class="chip ${s.cardSort === k ? 'on' : ''}" data-action="cardsort" data-v="${k}">${l}</button>`).join('')}
+    <button class="chip ${s.hideFound ? 'on' : ''}" data-action="togglehide">Dölj hittade</button></div><div class="card">`;
+  if (!cards.length) html += `<div class="empty"><div class="big">${I('search-x')}</div><p>Inget matchar.</p></div>`;
+  for (const c of cards) {
+    if (!c.cheapest) {
+      html += `<div class="row ${c.found ? 'found' : ''}"><input type="checkbox" class="chk" data-action="found" data-key="${esc(c.key)}" ${c.found ? 'checked' : ''}><div class="thumb empty">${c.error ? I('alert') : I('clock')}</div>
+        <div class="grow" data-action="detail" data-key="${esc(c.key)}"><div class="nm">${esc(c.name)}${c.qty > 1 ? ` <span class="pill">×${c.qty}</span>` : ''}</div><div class="sub"><span>${c.error ? esc(c.error) : 'Prisdata ej hämtad'}</span></div></div><span class="badge n">–</span></div>`;
+      continue;
+    }
+    const alts = c.prints.slice(1, 3).map(p => `${esc(p.set)} ${fmtEur(price(p))}`).join(', ');
+    html += cardRow(c, c.cheapest, { showSet: true, alts: alts ? 'alt: ' + alts : '' });
+  }
+  return html + '</div>';
+}
 
-        function getSetIconUrl(setCode) {
-            return `https://svgs.scryfall.io/sets/${setCode.toLowerCase()}.svg`;
-        }
+function viewDecks(m) {
+  const found = Object.keys(state.found).length;
+  const errs = m.cards.filter(c => c.error);
+  const unfetched = m.cards.filter(c => !c.fetched).length;
+  let html = `<div class="section-title"><h2>Dina decks</h2><button class="btn sm" data-action="deck-new">${I('plus')} Nytt deck</button></div>`;
+  if (!state.decks.length) {
+    html += `<div class="card empty"><div class="big">${I('library')}</div><p>Klistra in ett deck du bygger på. Bocka i vilka kort du redan har – resten hamnar automatiskt på jaktlistan.</p>
+      <button class="btn" data-action="deck-new">${I('plus')} Lägg till deck</button></div>`;
+  } else {
+    html += '<div class="card">';
+    for (const d of state.decks) {
+      const st = deckStats(d);
+      const pct = st.total ? Math.round((st.owned / st.total) * 100) : 0;
+      const on = d.active !== false;
+      html += `<div class="deck ${on ? '' : 'off'}" data-action="deck-open" data-id="${esc(d.id)}">
+        <div class="ic ${pct >= 100 ? 'done' : ''}">${pct >= 100 ? I('check-circle') : I('layers')}</div>
+        <div class="info"><b>${esc(d.name)}</b>
+          <div class="track"><div class="fill" style="width:${pct}%"></div></div>
+          <span class="muted">${on ? `${st.owned}/${st.total} kort · ${st.missing ? `saknas ${st.missing}${st.cost ? ' ≈ ' + fmtEur(st.cost) : ''}${st.unpriced ? ' (' + st.unpriced + ' utan pris)' : ''}` : 'komplett'}` : 'Ingår inte i jaktlistan'}</span>
+        </div>
+        <label class="switch" title="Med i jaktlistan" data-action="noop"><input type="checkbox" data-action="deck-active" data-id="${esc(d.id)}" ${on ? 'checked' : ''}><span></span></label>
+        <span class="chev">${I('chevron')}</span></div>`;
+    }
+    html += '</div>';
+  }
+  html += `<div class="section-title"><h2>Jaktlistan</h2></div><div class="card"><div class="pad">
+    <p><b>${m.cards.length} unika kort</b> saknas totalt${m.cards.length ? ` (${m.cards.reduce((s, c) => s + c.qty, 0)} st)` : ''}${unfetched ? ` · ${unfetched} utan prisdata` : ''}.</p>
+    <div class="btnrow"><button class="btn" data-action="fetch-missing" ${!unfetched ? 'disabled' : ''}>${I('cloud')} Hämta priser</button><button class="btn sec" data-action="refresh-all" ${!m.cards.length ? 'disabled' : ''}>${I('refresh')} Uppdatera alla</button></div>
+    ${found ? `<button class="btn ok wide" style="margin-top:10px" data-action="book-found">${I('check-circle')} Bokför ${found} hittade som ägda</button><p class="muted">Efter butiksbesöket: markerar korten som "har" i decken och tömmer bockarna.</p>` : ''}
+  </div></div>`;
+  if (errs.length) html += `<div class="card"><div class="pad"><h2>${I('alert')} ${errs.length} kort med problem</h2><ul class="errs">${errs.map(c => `<li><b>${esc(c.input)}</b> – ${esc(c.error)}</li>`).join('')}</ul>
+    <p class="muted" style="margin-top:8px">Rätta stavningen i decket och tryck "Hämta priser" igen.</p></div></div>`;
+  if (m.cards.some(c => c.approx)) html += `<div class="card"><div class="pad"><h2>≈ Fuzzy-träffar att dubbelkolla</h2><ul class="errs">${m.cards.filter(c => c.approx).map(c => `<li>"${esc(c.input)}" tolkades som <b>${esc(c.name)}</b></li>`).join('')}</ul></div></div>`;
+  return html;
+}
 
-        async function fetchData() {
-            document.getElementById('step1').classList.add('hidden');
-            document.getElementById('step2').classList.add('hidden');
-            document.getElementById('loading').classList.remove('hidden');
-            
-            allCards = [];
-            errorCards = [];
-            setData = {};
-            cardPriceRanks = {};
-            
-            for (let i = 0; i < cardList.length; i++) {
-                const cardName = cardList[i];
-                document.getElementById('progressCount').textContent = `${i + 1}/${cardList.length}`;
-                document.getElementById('progressBar').style.width = `${((i + 1) / cardList.length) * 100}%`;
-                document.getElementById('progressCard').textContent = cardName;
-                
-                try {
-                    const url = `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(cardName)}"&unique=prints`;
-                    const resp = await fetch(url);
-                    
-                    if (resp.ok) {
-                        const data = await resp.json();
-                        let foundAny = false;
-                        
-                        for (const c of data.data || []) {
-                            if (c.prices && c.prices.eur) {
-                                foundAny = true;
-                                let imageUrl = '';
-                                if (c.image_uris && c.image_uris.small) {
-                                    imageUrl = c.image_uris.small;
-                                } else if (c.card_faces && c.card_faces[0] && c.card_faces[0].image_uris) {
-                                    imageUrl = c.card_faces[0].image_uris.small || '';
-                                }
-                                
-                                const setCode = (c.set || '').toLowerCase();
-                                if (!setData[setCode]) {
-                                    setData[setCode] = {
-                                        name: c.set_name || '',
-                                        iconUrl: getSetIconUrl(setCode)
-                                    };
-                                }
-                                
-                                allCards.push({
-                                    name: cardName,
-                                    set: (c.set || '').toUpperCase(),
-                                    setCode: setCode,
-                                    setName: c.set_name || '',
-                                    collectorNumber: c.collector_number || '',
-                                    rarity: c.rarity || 'common',
-                                    priceEur: parseFloat(c.prices.eur) || 0,
-                                    cardmarketUrl: c.purchase_uris ? c.purchase_uris.cardmarket : '',
-                                    imageUrl: imageUrl,
-                                    colors: c.colors || [],
-                                    colorIdentity: c.color_identity || [],
-                                    manaCost: c.mana_cost || '',
-                                    typeLine: c.type_line || '',
-                                    colorKey: getColorIdentity(c.colors, c.color_identity)
-                                });
-                            }
-                        }
-                        
-                        if (!foundAny) errorCards.push(cardName + ' (inga EUR-priser)');
-                    } else {
-                        errorCards.push(cardName + ' (HTTP ' + resp.status + ')');
-                    }
-                } catch (e) {
-                    errorCards.push(cardName + ' (' + e.message + ')');
-                }
-                
-                await new Promise(r => setTimeout(r, 110));
-            }
-            
-            // Beräkna pris-rank för varje kort
-            calculatePriceRanks();
-            
-            document.getElementById('loading').classList.add('hidden');
-            showResults();
-        }
+function haveControl(d, e) {
+  const h = Math.min(e.qty, d.have[e.key] || 0);
+  const full = h >= e.qty, partial = h > 0 && !full;
+  if (e.qty > 1) return `<div class="have"><div class="step ${full ? 'full' : partial ? 'part' : ''}"><button data-action="have-dec" data-id="${esc(d.id)}" data-key="${esc(e.key)}" aria-label="Färre">−</button><span data-action="have-toggle-all" data-id="${esc(d.id)}" data-key="${esc(e.key)}" title="Tryck för alla/inga">${h}/${e.qty}</span><button data-action="have-inc" data-id="${esc(d.id)}" data-key="${esc(e.key)}" aria-label="Fler">+</button></div></div>`;
+  return `<div class="have"><input type="checkbox" class="chk" data-action="have-toggle" data-id="${esc(d.id)}" data-key="${esc(e.key)}" ${full ? 'checked' : ''} aria-label="Har kortet"></div>`;
+}
 
-        function calculatePriceRanks() {
-            // Gruppera printings per kortnamn
-            const byName = {};
-            for (const c of allCards) {
-                if (!byName[c.name]) byName[c.name] = [];
-                byName[c.name].push(c);
-            }
-            
-            // Sortera varje korts printings efter pris och tilldela rank
-            for (const name of Object.keys(byName)) {
-                const sorted = byName[name].sort((a, b) => a.priceEur - b.priceEur);
-                for (let i = 0; i < sorted.length; i++) {
-                    const key = `${sorted[i].name}|${sorted[i].set}|${sorted[i].collectorNumber}`;
-                    cardPriceRanks[key] = i + 1; // 1 = billigast, 2 = näst billigast, etc.
-                }
-            }
-        }
+function viewDeck(m, q) {
+  const d = state.decks.find(x => x.id === state.deckId);
+  if (!d) { state.deckId = null; return viewDecks(m); }
+  const st = deckStats(d);
+  const pct = st.total ? Math.round((st.owned / st.total) * 100) : 0;
+  const rows = st.entries.filter(e => matchQ({ name: (state.cache[e.key] && state.cache[e.key].name) || e.input, key: e.key }, q));
+  const missing = rows.filter(e => (d.have[e.key] || 0) < e.qty), owned = rows.filter(e => (d.have[e.key] || 0) >= e.qty);
+  const row = e => {
+    const c = state.cache[e.key]; const p = c && c.prints && c.prints[0];
+    const name = (c && c.name) || e.input;
+    const need = e.qty - Math.min(e.qty, d.have[e.key] || 0);
+    const isOwned = need === 0;
+    const found = state.found[e.key];
+    return `<div class="row deckrow ${isOwned ? 'owned' : ''}">
+      ${haveControl(d, e)}
+      ${thumb(p, e.key)}
+      <div class="grow" data-action="detail" data-key="${esc(e.key)}">
+        <div class="nm">${esc(name)}${e.qty > 1 ? ` <span class="pill">×${e.qty}</span>` : ''}${found && !isOwned ? ` <span class="pill ok">hittad ${I('check')}</span>` : ''}</div>
+        <div class="sub">${p ? `<span class="setcode">${esc(p.set)}</span><span>${rar(p.rarity)} billigast</span>` : `<span>${c && c.error ? I('alert') + ' ' + esc(c.error) : isOwned ? '' : 'pris ej hämtat'}</span>`}</div>
+      </div>
+      <div class="pr">${p ? `${badge(p)}${need > 1 ? `<span class="sek">×${need} = ${fmtEur(price(p) * need)}</span>` : state.settings.showSek ? `<span class="sek">${fmtSek(price(p))}</span>` : ''}` : ''}</div>
+    </div>`;
+  };
+  return `<button class="back" data-action="deck-back"><span style='display:inline-block;transform:rotate(180deg)'>${I('chevron')}</span> Alla decks</button>
+  <div class="hero"><div class="grid" style="grid-template-columns:1.4fr 1fr 1fr">
+    <div><b style="font-size:19px">${esc(d.name)}</b><small>${st.unique} unika · ${st.total} kort</small></div>
+    <div><b>${st.missing}</b><small>saknas</small></div>
+    <div><b>${st.missing ? fmtEur(st.cost) : I('check-circle')}</b><small>${st.missing ? 'att köpa, billigast' + (st.unpriced ? ` (+${st.unpriced} utan pris)` : '') : 'komplett'}</small></div>
+  </div><div class="track"><div class="fill" style="width:${pct}%"></div></div><div class="foot"><span>${st.owned} av ${st.total} har du</span><span>${pct} %</span></div></div>
+  ${st.unpriced ? `<div class="note warn" style="display:flex;align-items:center;gap:10px"><span style="flex:1">${st.unpriced} kort saknar prisdata.</span><button class="btn sm" data-action="fetch-missing">${I('cloud')} Hämta priser</button></div>` : ''}
+  <div class="chips"><button class="chip ${d.active !== false ? 'on' : ''}" data-action="deck-active-toggle" data-id="${esc(d.id)}">${d.active !== false ? I('check') + ' I jaktlistan' : 'Ej i jaktlistan'}</button><button class="chip" data-action="deck-edit" data-id="${esc(d.id)}">${I('pencil')} Redigera</button><button class="chip" data-action="deck-all" data-id="${esc(d.id)}" data-v="1">Har alla</button><button class="chip" data-action="deck-all" data-id="${esc(d.id)}" data-v="0">Har inga</button><button class="chip" data-action="deck-delete" data-id="${esc(d.id)}">${I('trash')} Ta bort</button></div>
+  <div class="card">
+    ${missing.length ? `<div class="grouphead" style="border-top:none">Saknas · ${missing.length}</div>${missing.map(row).join('')}` : ''}
+    ${owned.length ? `<div class="grouphead">Har · ${owned.length}</div>${owned.map(row).join('')}` : ''}
+    ${!rows.length ? `<div class="empty"><div class="big">${I('search-x')}</div><p>${q ? 'Inget matchar.' : 'Decket är tomt – tryck Redigera och klistra in kort.'}</p></div>` : ''}
+  </div>
+  <p class="muted" style="text-align:center;padding:0 10px">Bocka i korten du redan har. Det som saknas hamnar automatiskt i Set- och Kort-flikarna.</p>`;
+}
 
-        function getCardRank(card) {
-            const key = `${card.name}|${card.set}|${card.collectorNumber}`;
-            return cardPriceRanks[key] || 999;
-        }
+function viewMore(m) {
+  const s = state.settings;
+  const found = Object.keys(state.found).length;
+  return `<div class="card"><div class="pad">
+    <h2>${I('coins')} Valuta</h2>
+    <div class="field"><label>1 € i kronor${s.rateDate ? ` · hämtad ${esc(s.rateDate)}` : ' · manuell'}</label>
+      <div class="inline"><input class="txt" id="rate" type="number" step="0.01" inputmode="decimal" value="${s.sekRate}"><button class="btn sec" data-action="rate-save">Spara</button><button class="btn ghost" data-action="rate-fetch">Hämta</button></div></div>
+    <label class="inline"><input type="checkbox" class="chk" data-action="toggle-sek" ${s.showSek ? 'checked' : ''}> Visa priser även i kronor</label>
+  </div></div>
+  <div class="card"><div class="pad">
+    <h2>${I('upload')} Export av jaktlistan</h2>
+    <button class="btn wide" data-action="copy">${I('copy')} Kopiera shoppinglista (per set)</button>
+    <button class="btn sec wide" data-action="csv">${I('download')} Ladda ner CSV</button>
+  </div></div>
+  <div class="card"><div class="pad">
+    <h2>${I('wrench')} Underhåll</h2>
+    ${found ? `<button class="btn ok wide" data-action="book-found">${I('check-circle')} Bokför ${found} hittade som ägda</button>` : ''}
+    <button class="btn ghost wide" data-action="clear-found" ${!found ? 'disabled' : ''}>Nollställ "hittade"</button>
+    <button class="btn danger wide" data-action="clear-cache">Rensa all prisdata</button>
+  </div></div>
+  <div class="card"><div class="pad">
+    <h2>${I('bulb')} Så funkar det</h2>
+    <p>• <b>Decks:</b> klistra in decklistor (Arena, Moxfield, MTGO eller bara namn) och bocka i vad du redan har. Allt som saknas blir jaktlistan.</p>
+    <p>• <b>I butiken:</b> sök på setkoden (t.ex. <kbd>MH2</kbd>) när du bläddrar i en pärm. Tryck på ett kort för att jämföra butikens pris mot Cardmarket. Bocka av det du hittar.</p>
+    <p>• <b>Efteråt:</b> tryck "Bokför hittade som ägda" så flyttas köpen in i decken.</p>
+    <p>• Lägg sidan på hemskärmen (Dela → Lägg till på hemskärmen). All data ligger lokalt i mobilen, så listan syns även utan täckning.</p>
+    <p class="muted">Priser är Cardmarkets trendpris via Scryfall. Frakt tillkommer vid köp online – ett butikspris några kronor över trend är ofta ändå en bra deal.</p>
+  </div></div>`;
+}
 
-        function renderColorPips(colorKey) {
-            if (colorKey === 'M') {
-                return '<span class="color-pip color-M" title="Flerfärgad"></span>';
-            }
-            return `<span class="color-pip color-${colorKey}" title="${COLOR_NAMES[colorKey] || colorKey}"></span>`;
-        }
+function renderProgress() {
+  const el = $('#progress'); const f = state.fetching;
+  if (!f) { el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = `<div class="top"><span>Hämtar från Scryfall… ${f.current}/${f.total}</span><button data-action="cancel-fetch">Avbryt</button></div>
+    <div class="track"><div class="fill" style="width:${(f.current / f.total) * 100}%"></div></div><div class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.note || f.name)}</div>`;
+}
 
-        function renderRarity(rarity) {
-            const r = rarity.toLowerCase();
-            return `<span class="rarity rarity-${r}">${r.substring(0, 1).toUpperCase()}</span>`;
-        }
+function modalCard(m) {
+  const key = state.modal.key;
+  const card = m.cards.find(c => c.key === key);
+  if (card) return card;
+  // Kort som finns i ett deck men inte på jaktlistan (t.ex. redan ägt eller filtrerat)
+  const c = state.cache[key]; const e = state.decks.flatMap(d => parseList(d.text)).find(x => x.key === key);
+  if (!e) return null;
+  const prints = (c && c.prints) || [];
+  return { ...e, name: (c && c.name) || e.input, prints, cheapest: prints[0] || null, error: c && c.error, approx: false, found: !!state.found[key], sources: [] };
+}
 
-        function renderRankBadge(rank) {
-            if (rank === 1) return '<span class="rank-badge rank-1">🥇 #1</span>';
-            if (rank === 2) return '<span class="rank-badge rank-2">🥈 #2</span>';
-            if (rank === 3) return '<span class="rank-badge rank-3">🥉 #3</span>';
-            return '';
-        }
+function renderModal(m) {
+  const el = $('#modal');
+  if (!state.modal) { el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  if (state.modal.type === 'deck') return renderDeckEditor(el);
+  const card = modalCard(m);
+  if (!card) { state.modal = null; el.hidden = true; return; }
+  const sel = Math.min(state.modal.sel || 0, Math.max(card.prints.length - 1, 0));
+  const ref = card.prints[sel];
+  const big = ref && (ref.imgN || ref.img);
+  let cmp = '';
+  if (ref) {
+    const store = state.modal.store;
+    let res = '';
+    if (store > 0) {
+      const cmSek = price(ref) * state.settings.sekRate;
+      const diff = store - cmSek, pct = Math.round((diff / cmSek) * 100);
+      res = diff <= 0 ? `<div class="res good">${I('check-circle')} ${Math.abs(Math.round(diff))} kr billigare än Cardmarket-trend (${Math.abs(pct)} %) – bra deal!</div>`
+        : pct <= 25 ? `<div class="res">≈ ${Math.round(diff)} kr dyrare än trend (+${pct} %). Med frakt online är det nära nog.</div>`
+        : `<div class="res bad">${I('alert')} ${Math.round(diff)} kr dyrare än trend (+${pct} %).</div>`;
+    }
+    const qty = state.modal.qty || Math.max(1, card.qty || 1);
+    const inCart = state.cart.filter(x => x.key === card.key);
+    cmp = `<div class="cmp"><b>Butikens pris</b> <span class="muted">jämfört med ${esc(ref.set)} #${esc(ref.cn)} · ${fmtEur(price(ref))} ≈ ${fmtSek(price(ref))}</span>
+      <div class="inline" style="margin-top:8px"><input class="txt" id="storeprice" type="number" inputmode="decimal" placeholder="Pris i butiken, kr/st" value="${store || ''}"></div>${res}
+      <div class="inline" style="margin-top:12px"><div class="have"><div class="step"><button data-action="modal-qty" data-v="-1" aria-label="Färre">−</button><span>${qty}</span><button data-action="modal-qty" data-v="1" aria-label="Fler">+</button></div></div>
+        <button class="btn" style="flex:1" data-action="cart-add">${I('cart')} Lägg i köplistan${store > 0 ? ' · ' + fmtKr(store * qty) : ''}</button></div>
+      ${inCart.length ? `<p class="muted" style="margin:8px 0 0">I köplistan: ${inCart.map(x => `${esc(x.set)} ×${x.qty}${x.price ? ' à ' + x.price + ' kr' : ''}`).join(', ')}</p>` : ''}</div>`;
+  }
+  const decksNeed = card.sources.length ? `<p class="muted">Behövs till: ${card.sources.map(s => `<b>${esc(s.deck.name)}</b>${s.need > 1 ? ' ×' + s.need : ''}`).join(', ')}</p>` : '';
+  el.innerHTML = `<div class="sheet"><div class="handle"></div><button class="close" data-action="modal-close" aria-label="Stäng">×</button>
+    <div class="head">${big ? `<img src="${esc(big)}" alt="">` : ''}<div>
+      <h2>${esc(card.name)}</h2>
+      ${card.approx ? `<p class="muted">Du skrev: "${esc(card.input)}"</p>` : ''}
+      ${decksNeed}
+      <p class="muted">${card.prints.length} printings med pris${card.cheapest ? ` · billigast ${fmtEur(price(card.cheapest))} (${esc(card.cheapest.set)})` : ''}</p>
+      <label class="inline"><input type="checkbox" class="chk" data-action="found" data-key="${esc(card.key)}" ${card.found ? 'checked' : ''}> Hittad / köpt</label>
+      <p class="links" style="margin-top:10px">${ref && ref.cm ? `<a href="${esc(ref.cm)}" target="_blank" rel="noopener">Cardmarket ↗</a>` : ''}${ref && ref.sf ? `<a href="${esc(ref.sf)}" target="_blank" rel="noopener">Scryfall ↗</a>` : ''}</p>
+    </div></div>
+    ${cmp}
+    ${card.error ? `<div class="note err" style="margin-top:12px">${esc(card.error)}</div>` : ''}
+    ${card.prints.length ? `<h2 style="margin-top:16px">Alla printings <span class="muted">billigast först · tryck för att välja referens</span></h2>` : ''}
+    ${card.prints.map((p, i) => `<div class="prow ${i === sel ? 'sel' : ''}" data-action="modal-sel" data-i="${i}">
+      ${setIcon(p.set)}
+      <div style="flex:1;min-width:0"><div class="nm">${i === 0 ? STAR + ' ' : ''}${esc(p.setName)} <span class="muted mono" style="font-weight:700">${esc(p.set)}</span> <span class="muted">${esc((p.released || '').slice(0, 4))}</span></div>
+        <div class="sub"><span>${rar(p.rarity)} #${esc(p.cn)}</span>${p.foilOnly ? '<span>endast foil</span>' : ''}${p.tags.length ? `<span>${esc(p.tags.join(', '))}</span>` : ''}${p.eurFoil != null && p.eur != null ? `<span>foil ${fmtEur(p.eurFoil)}</span>` : ''}</div></div>
+      <div class="pr">${badge(p)}${state.settings.showSek ? `<span class="sek">${fmtSek(price(p))}</span>` : ''}</div>
+    </div>`).join('')}
+  </div>`;
+}
 
-        function showResults() {
-            const cheapest = {};
-            for (const c of allCards) {
-                if (!cheapest[c.name] || c.priceEur < cheapest[c.name].priceEur) {
-                    cheapest[c.name] = c;
-                }
-            }
-            
-            let total = 0;
-            for (const name of Object.keys(cheapest)) {
-                total += cheapest[name].priceEur;
-            }
-            
-            const cheapestBySet = {};
-            for (const name of Object.keys(cheapest)) {
-                const c = cheapest[name];
-                if (!cheapestBySet[c.set]) cheapestBySet[c.set] = [];
-                cheapestBySet[c.set].push(c.name);
-            }
-            
-            document.getElementById('statUnique').textContent = Object.keys(cheapest).length;
-            document.getElementById('statTotal').textContent = total.toFixed(2) + ' €';
-            document.getElementById('statSets').textContent = Object.keys(cheapestBySet).length;
-            
-            if (errorCards.length > 0) {
-                document.getElementById('warnings').classList.remove('hidden');
-                document.getElementById('warnings').innerHTML = `<strong>Varning:</strong> ${errorCards.length} kort kunde inte hämtas: ${errorCards.join(', ')}`;
-            }
-            
-            // Shoppinglista med set-ikoner
-            let shoppingHtml = '<div class="results-card"><div class="results-header header-purple">📝 Shoppinglista för pärmjakten</div>';
-            for (const set of Object.keys(cheapestBySet).sort()) {
-                const setCode = set.toLowerCase();
-                const iconUrl = getSetIconUrl(setCode);
-                shoppingHtml += `<div class="result-row">
-                    <img src="${iconUrl}" class="shop-set-icon" onerror="this.style.display='none'" alt="${set}">
-                    <span class="set-code">${set}</span>
-                    <span class="card-list">${cheapestBySet[set].sort().join(', ')}</span>
-                </div>`;
-            }
-            shoppingHtml += '</div>';
-            document.getElementById('viewShopping').innerHTML = shoppingHtml;
-            
-            // Priskoll
-            let priskollHtml = '<div class="results-card"><div class="results-header header-green">💰 Priskoll (dyrast först)</div>';
-            const sortedByPrice = Object.values(cheapest).sort((a, b) => b.priceEur - a.priceEur);
-            for (const c of sortedByPrice) {
-                const priceClass = c.priceEur < 1 ? 'price-green' : c.priceEur <= 5 ? 'price-yellow' : c.priceEur <= 20 ? 'price-orange' : 'price-red';
-                const bgStyle = c.priceEur > 5 ? 'background: #fef9c3;' : '';
-                priskollHtml += `<div class="result-row" style="${bgStyle}">
-                    <div class="colors">${renderColorPips(c.colorKey)}</div>
-                    <span class="card-name">${c.name}</span>
-                    <span class="set-code">${c.set}</span>
-                    <span class="price-tag ${priceClass}">${c.priceEur.toFixed(2)} €</span>
-                    ${c.cardmarketUrl ? `<a href="${c.cardmarketUrl}" target="_blank" class="cm-link">CM →</a>` : ''}
-                </div>`;
-            }
-            priskollHtml += '</div>';
-            document.getElementById('viewPriskoll').innerHTML = priskollHtml;
-            
-            // Spara för export och rendering
-            window.cheapest = cheapest;
-            window.cheapestBySet = cheapestBySet;
-            
-            // Rendera Per Set
-            renderPerSet();
-            
-            document.getElementById('results').classList.remove('hidden');
-        }
+function renderDeckEditor(el) {
+  const d = state.decks.find(x => x.id === state.modal.id);
+  el.innerHTML = `<div class="sheet"><div class="handle"></div><button class="close" data-action="modal-close" aria-label="Stäng">×</button>
+    <h2 style="font-size:19px;margin-bottom:12px">${d ? I('pencil') + ' Redigera deck' : I('plus') + ' Nytt deck'}</h2>
+    <div class="field"><label>Namn</label><input class="txt" id="deckname" placeholder="t.ex. Animar EDH" value="${esc(d ? d.name : '')}"></div>
+    <div class="field"><label>Kortlista</label><textarea id="decktext" spellcheck="false" placeholder="1 Animar, Soul of Elements&#10;4 Lightning Bolt&#10;Sol Ring&#10;…">${esc(d ? d.text : '')}</textarea>
+      <p class="muted" style="margin-top:6px">Ett kort per rad, gärna med antal. Klistra in direkt från Arena, Moxfield, Archidekt eller MTGO – setkoder och foil-markeringar filtreras bort. Rader med <kbd>#</kbd> ignoreras.</p></div>
+    <div class="btnrow"><button class="btn" data-action="deck-save" data-id="${esc(d ? d.id : '')}">${I('save')} Spara</button><button class="btn ghost" data-action="modal-close">Avbryt</button></div>
+  </div>`;
+  if (!d) setTimeout(() => { const n = $('#deckname'); if (n) n.focus(); }, 50);
+}
 
-        function renderPerSet() {
-            const filterValue = document.getElementById('filterPrintings').value;
-            const maxRank = filterValue === 'all' ? 9999 : parseInt(filterValue);
-            
-            // Filtrera kort baserat på rank
-            const filteredCards = allCards.filter(c => getCardRank(c) <= maxRank);
-            
-            // Gruppera efter set
-            const bySet = {};
-            for (const c of filteredCards) {
-                if (!bySet[c.set]) bySet[c.set] = [];
-                bySet[c.set].push(c);
-            }
-            
-            // Uppdatera filter-info
-            const totalSets = Object.keys(bySet).length;
-            const totalCards = filteredCards.length;
-            document.getElementById('filterInfo').textContent = `Visar ${totalCards} printings i ${totalSets} set`;
-            
-            // Rendera
-            let perSetHtml = '';
-            const sortedSets = Object.keys(bySet).sort((a, b) => bySet[b].length - bySet[a].length);
-            
-            for (const set of sortedSets) {
-                const setCode = set.toLowerCase();
-                const iconUrl = getSetIconUrl(setCode);
-                const setName = setData[setCode] ? setData[setCode].name : '';
-                
-                const cards = bySet[set].sort((a, b) => {
-                    const colorA = COLOR_ORDER[a.colorKey] || 99;
-                    const colorB = COLOR_ORDER[b.colorKey] || 99;
-                    if (colorA !== colorB) return colorA - colorB;
-                    
-                    const rarityA = RARITY_ORDER[a.rarity] || 99;
-                    const rarityB = RARITY_ORDER[b.rarity] || 99;
-                    if (rarityA !== rarityB) return rarityA - rarityB;
-                    
-                    return a.name.localeCompare(b.name);
-                });
-                
-                perSetHtml += `<div class="set-group">
-                    <div class="set-header">
-                        <div class="set-title">
-                            <img src="${iconUrl}" class="set-icon" onerror="this.style.display='none'" alt="${set}">
-                            <span>${set}</span>
-                            <span class="set-subtitle">${setName}</span>
-                        </div>
-                        <span class="set-badge">${cards.length} kort</span>
-                    </div>
-                    <div class="set-cards">`;
-                
-                let currentColor = null;
-                
-                for (const p of cards) {
-                    if (p.colorKey !== currentColor) {
-                        currentColor = p.colorKey;
-                        perSetHtml += `<div class="color-separator">
-                            ${renderColorPips(currentColor)}
-                            <span>${COLOR_NAMES[currentColor] || currentColor}</span>
-                        </div>`;
-                    }
-                    
-                    const rank = getCardRank(p);
-                    const isCheapest = rank === 1;
-                    const priceClass = p.priceEur < 1 ? 'price-green' : p.priceEur <= 5 ? 'price-yellow' : p.priceEur <= 20 ? 'price-orange' : 'price-red';
-                    
-                    perSetHtml += `<div class="result-row ${isCheapest ? 'cheapest-row' : ''}">
-                        ${p.imageUrl ? `<img src="${p.imageUrl}" class="card-img" alt="">` : '<div class="card-img"></div>'}
-                        <div class="card-info">
-                            <span class="${isCheapest ? 'cheapest-name' : ''}">${isCheapest ? '⭐ ' : ''}${p.name}${renderRankBadge(rank)}</span>
-                            <div class="card-number">#${p.collectorNumber} · ${p.typeLine.split('—')[0].trim()}</div>
-                        </div>
-                        <span class="mana-cost">${p.manaCost.replace(/\{/g, '').replace(/\}/g, '')}</span>
-                        ${renderRarity(p.rarity)}
-                        <span class="price-tag ${priceClass}">${p.priceEur.toFixed(2)} €</span>
-                        ${p.cardmarketUrl ? `<a href="${p.cardmarketUrl}" target="_blank" class="cm-link">CM →</a>` : ''}
-                    </div>`;
-                }
-                
-                perSetHtml += '</div></div>';
-            }
-            
-            document.getElementById('viewPerSet').innerHTML = perSetHtml;
-        }
+// ---------- Export ----------
+function shoppingText(m) {
+  const bySet = {};
+  for (const c of m.cards) if (c.cheapest && !c.found) (bySet[c.cheapest.set] = bySet[c.cheapest.set] || []).push(c);
+  const lines = [];
+  for (const set of Object.keys(bySet).sort()) {
+    const cs = bySet[set].sort((a, b) => a.name.localeCompare(b.name, 'sv'));
+    lines.push(`${set} – ${cs[0].cheapest.setName}`);
+    for (const c of cs) lines.push(`  ${c.qty > 1 ? c.qty + '× ' : ''}${c.name} (#${c.cheapest.cn}, ${fmtEur(price(c.cheapest))})`);
+  }
+  return lines.join('\n');
+}
+function csvText(m) {
+  const cell = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+  const rows = [['Set', 'Setnamn', 'Kort', 'Antal', 'Nr', 'Rarity', 'Pris EUR', 'Pris SEK', 'Hittad', 'Behövs till', 'Alt 1', 'Alt 2', 'Cardmarket']];
+  for (const c of m.cards) {
+    const p = c.cheapest || {};
+    rows.push([p.set, p.setName, c.name, c.qty, p.cn, p.rarity, price(p) != null ? price(p).toFixed(2) : '', price(p) != null ? Math.round(price(p) * state.settings.sekRate) : '',
+      c.found ? 'ja' : 'nej', c.sources.map(s => s.deck.name + (s.need > 1 ? ' x' + s.need : '')).join(', '),
+      c.prints[1] ? `${c.prints[1].set} ${price(c.prints[1]).toFixed(2)}` : '', c.prints[2] ? `${c.prints[2].set} ${price(c.prints[2]).toFixed(2)}` : '', p.cm]);
+  }
+  return '﻿' + rows.map(r => r.map(cell).join(';')).join('\r\n');
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); toast('Kopierat'); }
+  catch (e) { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('Kopierat'); }
+}
 
-        function switchView(view) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelector(`[data-view="${view}"]`).classList.add('active');
-            
-            document.getElementById('viewShopping').classList.add('hidden');
-            document.getElementById('viewPriskoll').classList.add('hidden');
-            document.getElementById('viewPerSet').classList.add('hidden');
-            document.getElementById('filterBar').classList.add('hidden');
-            
-            if (view === 'shopping') document.getElementById('viewShopping').classList.remove('hidden');
-            if (view === 'priskoll') document.getElementById('viewPriskoll').classList.remove('hidden');
-            if (view === 'perSet') {
-                document.getElementById('viewPerSet').classList.remove('hidden');
-                document.getElementById('filterBar').classList.remove('hidden');
-            }
-        }
+// ---------- Deck-åtgärder ----------
+function deckById(id) { return state.decks.find(d => d.id === id); }
+function setHave(id, key, n) {
+  const d = deckById(id); if (!d) return;
+  const e = parseList(d.text).find(x => x.key === key); if (!e) return;
+  n = Math.max(0, Math.min(e.qty, n));
+  if (n) d.have[key] = n; else delete d.have[key];
+  save(LS.decks, state.decks); render();
+}
+function bookFound() {
+  const keys = Object.keys(state.found);
+  if (!keys.length) return;
+  let n = 0;
+  for (const d of state.decks) for (const e of parseList(d.text)) if (state.found[e.key] && (d.have[e.key] || 0) < e.qty) { d.have[e.key] = e.qty; n++; }
+  state.found = {};
+  save(LS.decks, state.decks); save(LS.found, state.found); render();
+  toast(`${keys.length} kort bokförda som ägda (${n} deckrader)`);
+}
 
-        function exportCSV() {
-            let csv = 'Set,Kortnamn,Färg,Rarity,Pris EUR,Rank,Cardmarket\n';
-            for (const set of Object.keys(window.cheapestBySet).sort()) {
-                for (const name of window.cheapestBySet[set].sort()) {
-                    const c = window.cheapest[name];
-                    csv += `${set},"${c.name.replace(/"/g, '""')}",${COLOR_NAMES[c.colorKey] || c.colorKey},${c.rarity},${c.priceEur.toFixed(2)},1,${c.cardmarketUrl}\n`;
-                }
-            }
-            
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'MTG_Kortjakt.csv';
-            a.click();
-        }
+// ---------- Händelser ----------
+function setTab(t) { state.tab = t; save(LS.tab, t); window.scrollTo(0, 0); render(); }
 
-        function resetAll() {
-            cardList = [];
-            allCards = [];
-            errorCards = [];
-            setData = {};
-            cardPriceRanks = {};
-            document.getElementById('step1').classList.remove('hidden');
-            document.getElementById('step2').classList.add('hidden');
-            document.getElementById('results').classList.add('hidden');
-            document.getElementById('parsedCards').classList.add('hidden');
-            document.getElementById('parseResult').textContent = '';
-            document.getElementById('warnings').classList.add('hidden');
-            document.getElementById('filterPrintings').value = '1';
-        }
-    </script>
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-action]'); if (!el) return;
+  const a = el.dataset.action; const m = () => model();
+  if (el.tagName === 'A' && el.getAttribute('href') === '#') e.preventDefault();
+  switch (a) {
+    case 'noop': break; // t.ex. brytarens label – klicket ska inte bubbla vidare till raden
+    case 'tab': setTab(el.dataset.tab); break;
+    case 'found': {
+      const k = el.dataset.key; if (el.checked) state.found[k] = true; else delete state.found[k];
+      save(LS.found, state.found); render(); break;
+    }
+    case 'detail': state.modal = { type: 'card', key: el.dataset.key, sel: 0, store: '' }; render(); break;
+    case 'modal-close': state.modal = null; render(); break;
+    case 'modal-sel': state.modal.sel = +el.dataset.i; render(); break;
+    case 'modal-qty': { const c = modalCard(m()); const cur = state.modal.qty || Math.max(1, (c && c.qty) || 1); state.modal.qty = Math.max(1, cur + (+el.dataset.v)); render(); break; }
+    case 'cart-add': {
+      const c = modalCard(m()); if (!c || !c.prints.length) break;
+      const ref = c.prints[Math.min(state.modal.sel || 0, c.prints.length - 1)];
+      const qty = state.modal.qty || Math.max(1, c.qty || 1);
+      const p = state.modal.store > 0 ? +state.modal.store : null;
+      const ex = state.cart.find(x => x.key === c.key && x.set === ref.set && x.cn === ref.cn);
+      if (ex) { ex.qty += qty; if (p != null) ex.price = p; }
+      else state.cart.push({ id: uid(), key: c.key, name: c.name, set: ref.set, setName: ref.setName, cn: ref.cn, qty, price: p, cm: price(ref), added: Date.now() });
+      state.found[c.key] = true;
+      save(LS.found, state.found); save(LS.cart, state.cart);
+      state.modal = null; render(); toast(`${c.name} ligger i köplistan (${cartCount()} kort)`); break;
+    }
+    case 'cart-qty': { const x = state.cart.find(x => x.id === el.dataset.id); if (x) { x.qty = Math.max(1, x.qty + (+el.dataset.v)); save(LS.cart, state.cart); render(); } break; }
+    case 'cart-remove': { const x = state.cart.find(x => x.id === el.dataset.id); if (x) { state.cart = state.cart.filter(y => y !== x); if (!state.cart.some(y => y.key === x.key)) delete state.found[x.key]; save(LS.cart, state.cart); save(LS.found, state.found); render(); } break; }
+    case 'cart-clear': if (confirm('Töm köplistan? Bockarna för "hittad" behålls.')) { state.cart = []; save(LS.cart, state.cart); render(); } break;
+    case 'cart-copy': copyText(cartText()); break;
+    case 'cart-done': if (confirm('Markera alla kort i köplistan som ägda i dina decks och töm listan?')) cartDone(); break;
+    case 'receipt-show': state.receipt = true; render(); break;
+    case 'receipt-close': state.receipt = false; render(); break;
+    case 'setsort': state.settings.setSort = el.dataset.v; save(LS.settings, state.settings); render(); break;
+    case 'cardsort': state.settings.cardSort = el.dataset.v; save(LS.settings, state.settings); render(); break;
+    case 'togglehide': state.settings.hideFound = !state.settings.hideFound; save(LS.settings, state.settings); render(); break;
+    case 'togglecheapest': state.settings.onlyCheapest = !state.settings.onlyCheapest; save(LS.settings, state.settings); render(); break;
+    case 'fetch-missing': fetchAll(true); break;
+    case 'refresh-all': if (confirm('Hämta om priser för alla saknade kort? Bockar och decks påverkas inte.')) fetchAll(false); break;
+    case 'cancel-fetch': if (state.fetching) state.fetching.cancel(); break;
+    case 'rate-save': { const v = parseFloat(($('#rate').value || '').replace(',', '.')); if (v > 0) { state.settings.sekRate = v; state.settings.rateDate = null; save(LS.settings, state.settings); toast('Kurs sparad'); render(); } break; }
+    case 'rate-fetch': fetchRate(false); break;
+    case 'toggle-sek': state.settings.showSek = el.checked; save(LS.settings, state.settings); render(); break;
+    case 'copy': copyText(shoppingText(m())); break;
+    case 'csv': {
+      const blob = new Blob([csvText(m())], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'MTG_Kortjakt.csv';
+      document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000); break;
+    }
+    case 'clear-found': if (confirm('Nollställ alla bockar för "hittad"?')) { state.found = {}; save(LS.found, state.found); render(); } break;
+    case 'clear-cache': if (confirm('Rensa all hämtad prisdata? Decks och bockar behålls.')) { state.cache = {}; save(LS.cache, state.cache); render(); } break;
+    case 'book-found': if (confirm('Markera alla hittade kort som ägda i dina decks och töm bockarna?')) bookFound(); break;
+    // Decks
+    case 'deck-new': state.modal = { type: 'deck', id: null }; render(); break;
+    case 'deck-edit': state.modal = { type: 'deck', id: el.dataset.id }; render(); break;
+    case 'deck-open': state.deckId = el.dataset.id; window.scrollTo(0, 0); render(); break;
+    case 'deck-back': state.deckId = null; render(); break;
+    case 'deck-active': { const d = deckById(el.dataset.id); if (d) { d.active = el.checked; save(LS.decks, state.decks); render(); if (d.active && wantEntries().some(e => !state.cache[e.key])) fetchAll(true); } break; }
+    case 'deck-active-toggle': { const d = deckById(el.dataset.id); if (d) { d.active = d.active === false; save(LS.decks, state.decks); render(); toast(d.active ? 'Decket ingår i jaktlistan' : 'Decket är utelämnat från jaktlistan'); if (d.active && wantEntries().some(e => !state.cache[e.key])) fetchAll(true); } break; }
+    case 'deckfilter': state.settings.deckFilter = el.dataset.id || null; save(LS.settings, state.settings); render(); break;
+    case 'deck-save': {
+      const name = ($('#deckname').value || '').trim() || 'Namnlöst deck';
+      const text = $('#decktext').value || '';
+      const d = deckById(el.dataset.id);
+      if (d) { d.name = name; d.text = text; }
+      else { const nd = { id: uid(), name, text, have: {}, created: Date.now() }; state.decks.push(nd); state.deckId = nd.id; }
+      save(LS.decks, state.decks); state.modal = null; render();
+      const missing = wantEntries().filter(e => !state.cache[e.key]).length;
+      if (missing && navigator.onLine) fetchAll(true); else toast('Sparat');
+      break;
+    }
+    case 'deck-delete': { const d = deckById(el.dataset.id); if (d && confirm(`Ta bort "${d.name}"?`)) { state.decks = state.decks.filter(x => x !== d); state.deckId = null; save(LS.decks, state.decks); render(); } break; }
+    case 'deck-all': { const d = deckById(el.dataset.id); if (!d) break; d.have = {}; if (el.dataset.v === '1') for (const e of parseList(d.text)) d.have[e.key] = e.qty; save(LS.decks, state.decks); render(); break; }
+    case 'have-toggle': { const d = deckById(el.dataset.id); const e = d && parseList(d.text).find(x => x.key === el.dataset.key); if (e) setHave(d.id, e.key, el.checked ? e.qty : 0); break; }
+    case 'have-toggle-all': { const d = deckById(el.dataset.id); const e = d && parseList(d.text).find(x => x.key === el.dataset.key); if (e) setHave(d.id, e.key, (d.have[e.key] || 0) >= e.qty ? 0 : e.qty); break; }
+    case 'have-inc': { const d = deckById(el.dataset.id); if (d) setHave(d.id, el.dataset.key, (d.have[el.dataset.key] || 0) + 1); break; }
+    case 'have-dec': { const d = deckById(el.dataset.id); if (d) setHave(d.id, el.dataset.key, (d.have[el.dataset.key] || 0) - 1); break; }
+  }
+});
+document.addEventListener('change', e => {
+  if (e.target.classList && e.target.classList.contains('cartprice')) render();
+});
+document.addEventListener('input', e => {
+  if (e.target.classList && e.target.classList.contains('cartprice')) {
+    const x = state.cart.find(x => x.id === e.target.dataset.id);
+    if (x) { const v = parseFloat(e.target.value.replace(',', '.')); x.price = v > 0 ? v : null; save(LS.cart, state.cart); }
+    return;
+  }
+  if (e.target.id === 'storeprice' && state.modal) {
+    state.modal.store = parseFloat(e.target.value.replace(',', '.')) || '';
+    const pos = e.target.selectionStart; renderModal(model());
+    const inp = $('#storeprice'); if (inp) { inp.focus(); try { inp.setSelectionRange(pos, pos); } catch (err) {} }
+  }
+});
+document.addEventListener('toggle', e => {
+  const d = e.target; if (d.classList && d.classList.contains('set') && !state.query) {
+    if (d.open) state.open[d.dataset.set] = true; else delete state.open[d.dataset.set];
+    save(LS.open, state.open);
+  }
+}, true);
+$('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTab(b.dataset.tab); });
+let qT; $('#q').addEventListener('input', e => { clearTimeout(qT); qT = setTimeout(() => { state.query = e.target.value; if (state.tab === 'more') state.tab = 'set'; render(); }, 120); });
+$('#q-clear').addEventListener('click', () => { $('#q').value = ''; state.query = ''; render(); $('#q').focus(); });
+$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') { state.modal = null; render(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && (state.modal || state.receipt)) { state.modal = null; state.receipt = false; render(); } });
+
+// ---------- Start ----------
+document.querySelectorAll('[data-icon]').forEach(el => { el.innerHTML = I(el.dataset.icon); });
+render();
+const rateAge = state.settings.rateDate ? (Date.now() - new Date(state.settings.rateDate)) / 864e5 : 99;
+if (navigator.onLine && rateAge > 1) fetchRate(true);
+// Hämta priser automatiskt för kort som saknar prisdata (t.ex. första starten eller ny webbläsare)
+if (navigator.onLine && wantEntries().some(e => !state.cache[e.key])) setTimeout(() => fetchAll(true), 400);
+// Set-symbolregistret, max en gång per 30 dagar
+if (navigator.onLine && Date.now() - (state.setIcons.fetchedAt || 0) > 30 * 864e5) setTimeout(fetchSetIcons, 1500);
+</script>
 </body>
 </html>
